@@ -20,6 +20,11 @@ const NETWORK_MESSAGE = 'Nie udało się połączyć z serwerem. Sprawdź połą
 const FORMAT_MESSAGE = 'Serwer zwrócił dane w nieoczekiwanym formacie.';
 const TIMEOUT_MESSAGE = 'Serwer nie odpowiedział w ciągu 90 sekund. Spróbuj ponownie.';
 
+const STATUS_MESSAGES: Record<number, string> = {
+  413: 'Plik jest za duży. Maksymalny rozmiar to 10 MB.',
+  429: 'Zbyt wiele żądań. Spróbuj ponownie za kilka minut.',
+};
+
 export class ApiError extends Error {}
 
 function messageFor(body: unknown, status: number): string {
@@ -29,7 +34,7 @@ function messageFor(body: unknown, status: number): string {
     if (known) return known;
     if (typeof error?.message === 'string' && error.message) return error.message;
   }
-  return `Serwer zwrócił błąd (${status}).`;
+  return STATUS_MESSAGES[status] ?? `Serwer zwrócił błąd (${status}).`;
 }
 
 export async function analyzePdf(file: File, signal?: AbortSignal): Promise<AnalysisResult> {
@@ -62,9 +67,7 @@ export async function analyzePdf(file: File, signal?: AbortSignal): Promise<Anal
     try {
       json = await response.json();
     } catch {
-      throw new ApiError(
-        response.ok ? FORMAT_MESSAGE : `Serwer zwrócił błąd (${response.status}).`,
-      );
+      throw new ApiError(response.ok ? FORMAT_MESSAGE : messageFor(null, response.status));
     }
     if (!response.ok) throw new ApiError(messageFor(json, response.status));
 

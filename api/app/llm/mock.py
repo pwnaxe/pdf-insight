@@ -2,7 +2,7 @@ import re
 from collections import Counter
 from datetime import date
 
-from app.injection import find_injections, join_gaps
+from app.injection import find_injections
 from app.pdf import PageText
 from app.schemas import Amount, ChunkOutput, DatedItem, Entities, FinalOutput, ModelOutput
 
@@ -49,8 +49,13 @@ _TYPE_WORDS = [
     ("offer", "oferta"),
     ("report", "raport"),
 ]
-_CONTEXT = 50
-_LIMIT = 15
+_SENTENCE_END = re.compile(r"[.!?;]\s+|\n")
+_CONTEXT_NOISE = re.compile(
+    r"\b\d{1,2}\.\d{1,2}\.\d{4}\b|\b\d+\s*%|\b[A-Z]\d\b|[\d  ]+[.,]\d{2}\s*(?:zł|PLN|EUR|€|USD|\$)"
+)
+_CONTEXT = 60
+_LIMIT = 12
+_NO_CONTEXT = "brak kontekstu"
 
 
 def _pages(user: str) -> list[PageText]:
@@ -65,18 +70,43 @@ def _pages(user: str) -> list[PageText]:
 
 
 def _context(text: str, start: int) -> str:
-    return " ".join(text[max(0, start - _CONTEXT) : start].split()) or "brak kontekstu"
+    begin = max(0, start - _CONTEXT)
+    before = text[begin:start]
+    ends = list(_SENTENCE_END.finditer(before))
+    if ends:
+        before = before[ends[-1].end() :]
+    elif begin > 0 and text[begin - 1].isalnum():
+        before = before.partition(" ")[2]
+    before = _CONTEXT_NOISE.sub(" ", before)
+    return " ".join(before.split()).strip(" :-—–,(") or _NO_CONTEXT
+
+
+def _cap(amounts: list[Amount]) -> list[Amount]:
+    # One amount per currency is kept first so a long PLN list does not hide the rest.
+    seen: set[tuple[str, str]] = set()
+    useful = []
+    for amount in amounts:
+        key = (amount.currency, amount.context)
+        if amount.context != _NO_CONTEXT and key not in seen:
+            seen.add(key)
+            useful.append(amount)
+    chosen = {id(a) for a in {a.currency: a for a in reversed(useful)}.values()}
+    for amount in useful:
+        if len(chosen) >= _LIMIT:
+            break
+        chosen.add(id(amount))
+    return [a for a in useful if id(a) in chosen]
 
 
 def _amounts(text: str) -> list[Amount]:
     found: dict[tuple[float, str], Amount] = {}
     for m in _AMOUNT.finditer(text):
-        number = re.sub(r"[  ]", "", m.group(1)).replace(",", ".")
+        number = re.sub(r"[  ]", "", m.group(1)).replace(",", ".")
         key = (float(number), _CURRENCIES[m.group(2).lower()])
         found.setdefault(
             key, Amount(value=key[0], currency=key[1], context=_context(text, m.start()))
         )
-    return list(found.values())[:_LIMIT]
+    return _cap(list(found.values()))
 
 
 def _dates(text: str) -> list[DatedItem]:
@@ -148,7 +178,7 @@ def _summary(
             else "No organizations were identified in the document."
         )
         parts.append(f"The text contains {len(amounts)} amounts and {n_dates} dates.")
-        parts.append("This analysis was produced automatically in demo mode without an AI model.")
+        parts.append("This is a demo mode answer, produced by simple rules without an AI model.")
         return " ".join(parts)
     parts = [f"Dokument typu {kind} nosi tytuł „{clean_title}”."]
     parts.append(
@@ -157,21 +187,19 @@ def _summary(
         else "W dokumencie nie wskazano żadnych organizacji."
     )
     parts.append(f"W treści znaleziono {len(amounts)} kwot oraz {n_dates} dat.")
-    parts.append(
-        "Analizę przygotowano automatycznie w trybie demonstracyjnym bez użycia modelu AI."
-    )
+    parts.append("To odpowiedź trybu demonstracyjnego, przygotowana regułami bez użycia modelu AI.")
     return " ".join(parts)
 
 
 def _extract(user: str) -> dict:
     pages = _pages(user)
-    text = "\n\n".join(join_gaps(p.text) for p in pages)
-    first = join_gaps(pages[0].text) if pages else ""
+    text = "\n\n".join(p.text for p in pages)
+    first = pages[0].text if pages else ""
     kind, lang, title = _type(first), _language(text), _title(first)
     orgs = _unique([f"{m.group(1).strip()} {m.group(2)}" for m in _ORGANIZATION.finditer(text)])
     people = _unique([m.group(1) for m in _PERSON.finditer(text)])
     amounts, dates = _amounts(text), _dates(text)
-    hits = find_injections([PageText(p.number, join_gaps(p.text)) for p in pages])
+    hits = find_injections(pages)
 
     points = [f"Typ dokumentu: {kind}.", f"Język dokumentu: {lang}."]
     if title:

@@ -32,3 +32,12 @@ test('reports a network failure', async () => {
   stubFetch(new TypeError('Failed to fetch'));
   await expect(analyzePdf(file)).rejects.toThrow(/połączyć/);
 });
+
+test.each([
+  [429, /Zbyt wiele żądań/],
+  [413, /za duży/],
+  [502, /błąd \(502\)/],
+])('maps HTTP %i without a JSON body', async (status, message) => {
+  stubFetch(new Response('<html>nginx</html>', { status }));
+  await expect(analyzePdf(file)).rejects.toThrow(message);
+});

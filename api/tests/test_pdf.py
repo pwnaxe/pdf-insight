@@ -16,6 +16,13 @@ def test_contract_pages(contract_bytes: bytes) -> None:
     assert not result.truncated
 
 
+def test_contract_polish_text_is_clean(contract_bytes: bytes) -> None:
+    text = extract_pdf(contract_bytes, max_pages=100, max_chars=400_000).pages[3].text
+    assert "warunki płatności" in text
+    assert "184 500,00 zł" in text
+    assert "łącznie 226 935,00 zł brutto" in text
+
+
 def test_truncation(contract_bytes: bytes) -> None:
     result = extract_pdf(contract_bytes, max_pages=100, max_chars=3000)
     assert result.truncated
