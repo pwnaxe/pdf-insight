@@ -1,9 +1,13 @@
 from collections import Counter
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 from app.schemas import Amount, ChunkOutput, DatedItem, DocumentType
 
 MAX_KEYWORDS = 12
+MAX_AMOUNTS = 20
+MAX_DATES = 20
+SIMILAR_CONTEXT = 0.85
 
 
 @dataclass(frozen=True)
@@ -42,15 +46,30 @@ def _most_common[T](values: list[T]) -> T:
     return Counter(values).most_common(1)[0][0]
 
 
+def _merge_amounts(items: list[Amount]) -> list[Amount]:
+    kept: list[Amount] = []
+    for amount in items:
+        context = _norm(amount.context)
+        duplicate = any(
+            k.value == amount.value
+            and k.currency == amount.currency
+            and SequenceMatcher(None, _norm(k.context), context).ratio() >= SIMILAR_CONTEXT
+            for k in kept
+        )
+        if not duplicate:
+            kept.append(amount)
+    return kept
+
+
 def merge_chunk_outputs(outputs: list[ChunkOutput]) -> MergedExtraction:
     if not outputs:
         raise ValueError("nothing to merge")
 
-    amounts: dict[tuple[float, str, str], Amount] = {}
+    amounts: list[Amount] = []
     dates: dict[tuple[str, str], DatedItem] = {}
     for out in outputs:
         for amount in out.amounts:
-            amounts.setdefault((amount.value, amount.currency, _norm(amount.context)), amount)
+            amounts.append(amount)
         for item in out.dates:
             dates.setdefault((item.date, _norm(item.context)), item)
 
@@ -61,8 +80,8 @@ def merge_chunk_outputs(outputs: list[ChunkOutput]) -> MergedExtraction:
         date=next((o.date for o in outputs if o.date), None),
         organizations=_dedupe([n for o in outputs for n in o.entities.organizations]),
         people=_dedupe([n for o in outputs for n in o.entities.people]),
-        amounts=list(amounts.values()),
-        dates=list(dates.values()),
+        amounts=_merge_amounts(amounts)[:MAX_AMOUNTS],
+        dates=list(dates.values())[:MAX_DATES],
         keywords=_dedupe([k for o in outputs for k in o.keywords])[:MAX_KEYWORDS],
         summaries=[o.summary for o in outputs],
         key_points=[p for o in outputs for p in o.key_points],

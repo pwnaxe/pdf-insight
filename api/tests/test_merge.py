@@ -103,3 +103,34 @@ def test_injection_any_and_summaries_collected() -> None:
 def test_empty_input() -> None:
     with pytest.raises(ValueError):
         merge_chunk_outputs([])
+
+
+def test_amounts_near_identical_context_deduped() -> None:
+    merged = merge_chunk_outputs(
+        [
+            chunk(
+                amounts=[Amount(value=5.0, currency="PLN", context="Opłata miesięczna za hosting")]
+            ),
+            chunk(
+                amounts=[Amount(value=5.0, currency="PLN", context="Opłata miesięczna za hostingu")]
+            ),
+            chunk(amounts=[Amount(value=5.0, currency="PLN", context="Kara umowna")]),
+        ]
+    )
+    assert [a.context for a in merged.amounts] == [
+        "Opłata miesięczna za hosting",
+        "Kara umowna",
+    ]
+
+
+def test_amounts_and_dates_capped_in_document_order() -> None:
+    amounts = [Amount(value=float(i), currency="PLN", context=f"pozycja {i}") for i in range(30)]
+    dates = [DatedItem(date=f"2026-01-{i:02d}", context=f"termin {i}") for i in range(1, 29)]
+    merged = merge_chunk_outputs(
+        [
+            chunk(amounts=amounts[:15], dates=dates[:14]),
+            chunk(amounts=amounts[15:], dates=dates[14:]),
+        ]
+    )
+    assert [a.value for a in merged.amounts] == [float(i) for i in range(20)]
+    assert [d.date for d in merged.dates] == [f"2026-01-{i:02d}" for i in range(1, 21)]
