@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 from pypdf import PdfWriter
 
+from app.config import Settings
+
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -31,6 +33,13 @@ def encrypted_pdf_bytes() -> bytes:
     writer.add_blank_page(width=200, height=200)
     writer.encrypt("secret")
     return _write(writer)
+
+
+@pytest.fixture(autouse=True)
+def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
 @pytest.fixture

@@ -11,10 +11,12 @@ class Settings(BaseSettings):
     env: str = "prod"
     llm_provider: Literal["openai", "mock"] = "mock"
     openai_api_key: SecretStr | None = None
-    openai_model: str = "gpt-4.1-mini"
+    openai_model: str = "gpt-6-luna"
     openai_base_url: str | None = None
     llm_max_tokens: int = 4000
     llm_timeout_s: float = 25
+    llm_temperature: float | None = None
+    llm_reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = None
     allowed_origins: str = "https://pwnaxe.github.io"
     max_file_mb: int = 10
     max_pages: int = 100
