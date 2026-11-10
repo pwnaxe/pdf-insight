@@ -211,7 +211,7 @@ async def test_summary_with_normal_payment_terms_passes_echo_check(contract_byte
         "Umowa dotyczy wdrożenia systemu. Wynagrodzenie jest ryczałtowe."
     )
     provider = FakeProvider([model_json(summary=summary)])
-    run = await analyze_document(doc, "umowa.pdf", provider, Settings())
+    run = await analyze_document(doc, "umowa.pdf", provider, Settings(chunk_chars=100_000))
     assert len(provider.calls) == 1
     assert run.result.suspected_injection is True
     assert run.result.summary == summary
