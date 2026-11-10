@@ -170,15 +170,30 @@ async def analyze_document(
         fields.pop("injection_quotes")
         model_flag = out.injection_detected
     else:
-        outputs = await _extract_chunks(provider, plan.chunks, check)
-        merged = merge_chunk_outputs(outputs)
-        final = await _call(
-            provider,
-            "final",
-            FinalOutput,
-            final_user_prompt(merged.summaries, merged.key_points),
-            check,
-        )
+        planned = [page for chunk in plan.chunks for page in chunk]
+        if sum(len(page.text) for page in planned) <= settings.direct_summary_chars:
+            # The summary over the full text runs alongside the chunk calls to save a round trip.
+            outputs, final = await asyncio.gather(
+                _extract_chunks(provider, plan.chunks, check),
+                _call(
+                    provider,
+                    "summary",
+                    FinalOutput,
+                    document_user_prompt(planned),
+                    check,
+                ),
+            )
+            merged = merge_chunk_outputs(outputs)
+        else:
+            outputs = await _extract_chunks(provider, plan.chunks, check)
+            merged = merge_chunk_outputs(outputs)
+            final = await _call(
+                provider,
+                "final",
+                FinalOutput,
+                final_user_prompt(merged.summaries, merged.key_points),
+                check,
+            )
         fields = {
             "language": merged.language,
             "type": merged.type,

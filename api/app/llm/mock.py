@@ -254,6 +254,11 @@ class MockProvider:
     ) -> str:
         if schema_name == "final":
             return _final(user).model_dump_json(by_alias=True)
+        if schema_name == "summary":
+            data = _extract(user)
+            return FinalOutput(
+                summary=data["summary"], key_points=data["key_points"][:7]
+            ).model_dump_json(by_alias=True)
         model = ChunkOutput if schema_name == "chunk" else ModelOutput
         data = _extract(user)
         if schema_name == "chunk":
