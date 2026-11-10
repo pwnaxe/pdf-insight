@@ -53,8 +53,7 @@ def _normalise(text: str) -> str:
 def _injected_phrases(hits: list[InjectionHit]) -> list[str]:
     phrases: list[str] = []
     for hit in hits:
-        # The first word may be cut by the snippet context window, so it is skipped.
-        words = _normalise(hit.snippet).split()[1:]
+        words = _normalise(hit.snippet).split()
         phrases += [
             " ".join(words[i : i + _PHRASE_WORDS]) for i in range(len(words) - _PHRASE_WORDS + 1)
         ]

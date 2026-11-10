@@ -5,7 +5,7 @@ import pytest
 from app.config import Settings
 from app.errors import ApiError
 from app.llm import LLMTimeout
-from app.pdf import ExtractedPdf, PageText
+from app.pdf import ExtractedPdf, PageText, extract_pdf
 from app.pipeline import analyze_document, sanitize_file_name
 from app.prompts import document_user_prompt
 
@@ -202,3 +202,16 @@ def test_document_tags_in_text_are_neutralised() -> None:
 )
 def test_sanitize_file_name(raw: str | None, expected: str) -> None:
     assert sanitize_file_name(raw) == expected
+
+
+async def test_summary_with_normal_payment_terms_passes_echo_check(contract_bytes: bytes) -> None:
+    doc = extract_pdf(contract_bytes, 100, 400_000)
+    summary = (
+        "Faktury płatne są przelewem w terminie 14 dni od daty doręczenia faktury. "
+        "Umowa dotyczy wdrożenia systemu. Wynagrodzenie jest ryczałtowe."
+    )
+    provider = FakeProvider([model_json(summary=summary)])
+    run = await analyze_document(doc, "umowa.pdf", provider, Settings())
+    assert len(provider.calls) == 1
+    assert run.result.suspected_injection is True
+    assert run.result.summary == summary
