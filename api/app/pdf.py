@@ -2,6 +2,8 @@ import io
 import re
 from dataclasses import dataclass
 
+import pdfplumber
+from pdfminer.pdfparser import PDFSyntaxError
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
@@ -71,24 +73,34 @@ def extract_pdf(data: bytes, max_pages: int, max_chars: int) -> ExtractedPdf:
     without_text: list[int] = []
     remaining = max_chars
     truncated = False
-    for number, page in enumerate(reader.pages, start=1):
-        try:
-            text = normalize_text(page.extract_text() or "")
-        except (PyPdfError, ValueError, KeyError, TypeError, RecursionError) as exc:
-            raise PdfError(
-                "PDF_INVALID", "Nie udało się odczytać pliku PDF. Plik jest uszkodzony.", 422
-            ) from exc
-        if not _has_text(text):
-            without_text.append(number)
-            continue
-        if remaining <= 0:
-            truncated = True
-            continue
-        if len(text) > remaining:
-            text = text[:remaining]
-            truncated = True
-        remaining -= len(text)
-        pages.append(PageText(number, text))
+    try:
+        with pdfplumber.open(io.BytesIO(data)) as plumber:
+            for number, page in enumerate(plumber.pages, start=1):
+                text = normalize_text(page.extract_text() or "")
+                page.flush_cache()
+                if not _has_text(text):
+                    without_text.append(number)
+                    continue
+                if remaining <= 0:
+                    truncated = True
+                    continue
+                if len(text) > remaining:
+                    text = text[:remaining]
+                    truncated = True
+                remaining -= len(text)
+                pages.append(PageText(number, text))
+    except (
+        PyPdfError,
+        PDFSyntaxError,
+        ValueError,
+        KeyError,
+        TypeError,
+        OSError,
+        RecursionError,
+    ) as exc:
+        raise PdfError(
+            "PDF_INVALID", "Nie udało się odczytać pliku PDF. Plik jest uszkodzony.", 422
+        ) from exc
 
     if not pages and not truncated:
         raise PdfError(

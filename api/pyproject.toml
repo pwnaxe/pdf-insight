@@ -10,6 +10,7 @@ dependencies = [
     "pypdf",
     "openai",
     "python-multipart",
+    "pdfplumber>=0.11.10",
 ]
 
 [dependency-groups]
