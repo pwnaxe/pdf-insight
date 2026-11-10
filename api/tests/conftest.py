@@ -31,3 +31,8 @@ def encrypted_pdf_bytes() -> bytes:
     writer.add_blank_page(width=200, height=200)
     writer.encrypt("secret")
     return _write(writer)
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"

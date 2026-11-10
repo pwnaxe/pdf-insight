@@ -5,18 +5,16 @@ from dataclasses import dataclass
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
+from app.errors import ApiError
+
 MIN_TEXT_CHARS = 10
 
 _SPACES = re.compile(r"[^\S\n]+")
 _BLANK_LINES = re.compile(r"\n\s*\n\s*(?:\n\s*)*")
 
 
-class PdfError(Exception):
-    def __init__(self, code: str, message: str, status: int) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.status = status
+class PdfError(ApiError):
+    pass
 
 
 @dataclass(frozen=True)

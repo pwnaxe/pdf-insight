@@ -1,0 +1,63 @@
+import json
+
+import pytest
+
+from app.config import Settings
+from app.llm import build_provider
+from app.llm.mock import MockProvider
+from app.pdf import PageText
+from app.prompts import document_user_prompt, final_user_prompt
+from app.schemas import ChunkOutput, FinalOutput, ModelOutput
+
+pytestmark = pytest.mark.anyio
+
+
+def walk_objects(node: object):
+    if isinstance(node, dict):
+        if node.get("type") == "object":
+            yield node
+        for value in node.values():
+            yield from walk_objects(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from walk_objects(value)
+
+
+@pytest.mark.parametrize("model", [ModelOutput, ChunkOutput, FinalOutput])
+def test_wire_schemas_are_strict_compatible(model: type) -> None:
+    schema = model.model_json_schema()
+    assert "keyPoints" in schema["properties"]
+    for obj in walk_objects(schema):
+        assert obj["additionalProperties"] is False
+        assert sorted(obj["required"]) == sorted(obj["properties"])
+
+
+def test_factory_returns_mock_by_default() -> None:
+    assert isinstance(build_provider(Settings()), MockProvider)
+
+
+async def test_mock_extracts_facts() -> None:
+    text = (
+        "UMOWA NR 1/2026\nzawarta 12.03.2026 r. pomiędzy Alfa Beta sp. z o.o. a Gamma S.A.\n"
+        "Wynagrodzenie 184 500,00 zł oraz 8 600 EUR i 890 USD. Termin: 5 maja 2026."
+    )
+    user = document_user_prompt([PageText(1, text)])
+    raw = await MockProvider().complete_json("", user, "analysis", {})
+    out = ModelOutput.model_validate(json.loads(raw))
+    assert out.type == "umowa"
+    assert out.language == "pl"
+    assert out.date == "2026-03-12"
+    assert [(a.value, a.currency) for a in out.amounts] == [
+        (184500.0, "PLN"),
+        (8600.0, "EUR"),
+        (890.0, "USD"),
+    ]
+    assert [d.date for d in out.dates] == ["2026-03-12", "2026-05-05"]
+    assert out.entities.organizations == ["Alfa Beta sp. z o.o.", "Gamma S.A."]
+    assert out.injection_detected is False
+
+
+async def test_mock_final_output_is_valid() -> None:
+    user = final_user_prompt(["Zdanie jeden. Zdanie dwa."], ["punkt 1", "punkt 2"])
+    raw = await MockProvider().complete_json("", user, "final", {})
+    FinalOutput.model_validate(json.loads(raw))
