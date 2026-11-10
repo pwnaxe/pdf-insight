@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -42,6 +43,28 @@ def _dedupe(items: list[str]) -> list[str]:
     return result
 
 
+_LEGAL_SUFFIX = re.compile(r"\s(sp z o o|sp j|sp k|s a|sa|gmbh|ltd|inc)$")
+
+
+def _org_key(name: str) -> str:
+    plain = " ".join(re.sub(r"[.,]", " ", name.casefold()).split())
+    stripped = _LEGAL_SUFFIX.sub("", plain)
+    return stripped or plain
+
+
+def _dedupe_organizations(items: list[str]) -> list[str]:
+    # Same entity with and without a legal form: keep the longer (full) name at the first position.
+    names: dict[str, str] = {}
+    for item in items:
+        key = _org_key(item)
+        if not key:
+            continue
+        clean = " ".join(item.split())
+        if key not in names or len(clean) > len(names[key]):
+            names[key] = clean
+    return list(names.values())
+
+
 def _most_common[T](values: list[T]) -> T:
     return Counter(values).most_common(1)[0][0]
 
@@ -78,7 +101,7 @@ def merge_chunk_outputs(outputs: list[ChunkOutput]) -> MergedExtraction:
         type=_most_common([o.type for o in outputs]),
         title=next((o.title for o in outputs if o.title), None),
         date=next((o.date for o in outputs if o.date), None),
-        organizations=_dedupe([n for o in outputs for n in o.entities.organizations]),
+        organizations=_dedupe_organizations([n for o in outputs for n in o.entities.organizations]),
         people=_dedupe([n for o in outputs for n in o.entities.people]),
         amounts=_merge_amounts(amounts)[:MAX_AMOUNTS],
         dates=list(dates.values())[:MAX_DATES],
