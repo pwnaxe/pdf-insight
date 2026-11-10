@@ -1,5 +1,6 @@
 import type { HistoryEntry } from '../lib/history';
 import { formatDateTime } from '../lib/format';
+import { card, mutedText, primaryButton, secondaryButton } from './ui';
 
 type Props = {
   entries: HistoryEntry[];
@@ -10,32 +11,39 @@ type Props = {
 
 export function HistoryPanel({ entries, onOpen, onDelete, onClear }: Props) {
   return (
-    <section className="card" aria-labelledby="history-title">
-      <div className="history-head">
-        <h2 id="history-title">Historia</h2>
+    <section className={card} aria-labelledby="history-title">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 id="history-title" className="text-lg font-semibold">
+          Historia
+        </h2>
         {entries.length > 0 && (
-          <button type="button" className="button button--secondary" onClick={onClear}>
+          <button type="button" className={secondaryButton} onClick={onClear}>
             Wyczyść historię
           </button>
         )}
       </div>
       {entries.length === 0 ? (
-        <p className="muted">Brak zapisanych analiz.</p>
+        <p className={mutedText}>Brak zapisanych analiz.</p>
       ) : (
-        <ul className="history">
+        <ul className="history divide-y divide-slate-200">
           {entries.map((entry) => (
-            <li key={entry.id}>
-              <div className="history-info">
-                <span className="break">{entry.result.document.fileName}</span>
-                <span className="muted">{formatDateTime(entry.savedAt)}</span>
+            <li
+              key={entry.id}
+              className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+            >
+              <div className="flex min-w-0 flex-col">
+                <span className="font-medium [overflow-wrap:anywhere] break-words">
+                  {entry.result.document.fileName}
+                </span>
+                <span className={mutedText}>{formatDateTime(entry.savedAt)}</span>
               </div>
-              <div className="actions">
-                <button type="button" className="button" onClick={() => onOpen(entry)}>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={primaryButton} onClick={() => onOpen(entry)}>
                   Otwórz
                 </button>
                 <button
                   type="button"
-                  className="button button--secondary"
+                  className={secondaryButton}
                   aria-label={`Usuń ${entry.result.document.fileName}`}
                   onClick={() => onDelete(entry.id)}
                 >
