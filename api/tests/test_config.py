@@ -11,7 +11,7 @@ def make(**kwargs: object) -> Settings:
 def test_defaults() -> None:
     settings = make()
     assert settings.llm_provider == "mock"
-    assert settings.openai_model == "gpt-4.1-mini"
+    assert settings.openai_model == "gpt-6-luna"
     assert settings.origins == ["https://pwnaxe.github.io"]
     assert settings.max_file_bytes == 10 * 1024 * 1024
 
@@ -38,3 +38,31 @@ def test_env_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = make()
     assert settings.max_pages == 7
     assert settings.trust_proxy is True
+
+
+def test_llm_options_unset_by_default() -> None:
+    settings = make()
+    assert settings.llm_temperature is None
+    assert settings.llm_reasoning_effort is None
+
+
+def test_llm_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TEMPERATURE", "0.2")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "low")
+    settings = make()
+    assert settings.llm_temperature == 0.2
+    assert settings.llm_reasoning_effort == "low"
+
+
+def test_invalid_reasoning_effort() -> None:
+    with pytest.raises(ValidationError):
+        make(llm_reasoning_effort="extreme")
+
+
+@pytest.mark.parametrize("effort", ["none", "minimal", "low", "medium", "high", "xhigh"])
+def test_reasoning_effort_values(effort: str) -> None:
+    assert make(llm_reasoning_effort=effort).llm_reasoning_effort == effort
+
+
+def test_chunk_chars_default() -> None:
+    assert make().chunk_chars == 12_000
