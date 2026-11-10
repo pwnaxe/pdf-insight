@@ -1,10 +1,14 @@
 import json
+import logging
+from types import SimpleNamespace
 
 import pytest
 
 from app.config import Settings
 from app.llm import build_provider
+from app.llm.base import LLMError
 from app.llm.mock import MockProvider
+from app.llm.openai_provider import OpenAIProvider
 from app.pdf import PageText
 from app.prompts import document_user_prompt, final_user_prompt
 from app.schemas import ChunkOutput, FinalOutput, ModelOutput
@@ -61,3 +65,48 @@ async def test_mock_final_output_is_valid() -> None:
     user = final_user_prompt(["Zdanie jeden. Zdanie dwa."], ["punkt 1", "punkt 2"])
     raw = await MockProvider().complete_json("", user, "final", {})
     FinalOutput.model_validate(json.loads(raw))
+
+
+def openai_settings(**kwargs: object) -> Settings:
+    return Settings(llm_provider="openai", openai_api_key="placeholder", **kwargs)
+
+
+def test_optional_params_omitted_by_default() -> None:
+    assert OpenAIProvider(openai_settings()).optional_params() == {}
+
+
+def test_optional_params_when_set() -> None:
+    provider = OpenAIProvider(openai_settings(llm_temperature=0.1, llm_reasoning_effort="low"))
+    assert provider.optional_params() == {"temperature": 0.1, "reasoning_effort": "low"}
+
+
+class FailingCompletions:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+        self.kwargs: dict = {}
+
+    async def create(self, **kwargs: object) -> object:
+        self.kwargs = kwargs
+        raise self.exc
+
+
+async def test_request_kwargs_and_error_logging(caplog: pytest.LogCaptureFixture) -> None:
+    import httpx
+    import openai
+
+    request = httpx.Request("POST", "https://api.example/v1/chat/completions")
+    response = httpx.Response(400, request=request)
+    error = openai.BadRequestError("Unsupported value: temperature", response=response, body=None)
+    completions = FailingCompletions(error)
+    provider = OpenAIProvider(openai_settings(llm_reasoning_effort="low"))
+    provider._client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    with caplog.at_level(logging.WARNING), pytest.raises(LLMError):
+        await provider.complete_json("sys", "secret document text", "analysis", {})
+    assert completions.kwargs["reasoning_effort"] == "low"
+    assert "temperature" not in completions.kwargs
+    assert len(caplog.records) == 1
+    line = caplog.records[0].getMessage()
+    assert "BadRequestError" in line
+    assert "400" in line
+    assert "Unsupported value: temperature" in line
+    assert "secret document text" not in line
