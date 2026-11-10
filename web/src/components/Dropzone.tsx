@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { primaryButton } from './ui';
 
 type Props = {
   disabled?: boolean;
@@ -27,7 +28,11 @@ export function Dropzone({ disabled = false, onFile }: Props) {
 
   return (
     <div
-      className={`dropzone${dragging ? ' dropzone--over' : ''}`}
+      className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-4 py-12 text-center transition-colors ${
+        dragging
+          ? 'border-indigo-600 bg-indigo-50'
+          : 'border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50/50'
+      }`}
       role="group"
       aria-label="Wgraj plik PDF"
       onDragOver={(event) => {
@@ -37,9 +42,9 @@ export function Dropzone({ disabled = false, onFile }: Props) {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
-      <p>Przeciągnij plik PDF tutaj lub</p>
+      <p className="text-lg font-medium text-slate-900">Przeciągnij plik PDF tutaj lub</p>
       <div
-        className="button"
+        className={primaryButton}
         role="button"
         tabIndex={disabled ? -1 : 0}
         aria-disabled={disabled}
@@ -48,10 +53,10 @@ export function Dropzone({ disabled = false, onFile }: Props) {
       >
         Wybierz plik
       </div>
-      <p className="hint">PDF z warstwą tekstową, do 10 MB.</p>
+      <p className="text-sm text-slate-600">PDF z warstwą tekstową, do 10 MB.</p>
       <input
         ref={inputRef}
-        className="visually-hidden"
+        className="sr-only"
         type="file"
         accept="application/pdf"
         tabIndex={-1}
