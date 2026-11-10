@@ -2,7 +2,7 @@ import re
 from collections import Counter
 from datetime import date
 
-from app.injection import find_injections, join_gaps
+from app.injection import find_injections
 from app.pdf import PageText
 from app.schemas import Amount, ChunkOutput, DatedItem, Entities, FinalOutput, ModelOutput
 
@@ -193,13 +193,13 @@ def _summary(
 
 def _extract(user: str) -> dict:
     pages = _pages(user)
-    text = "\n\n".join(join_gaps(p.text) for p in pages)
-    first = join_gaps(pages[0].text) if pages else ""
+    text = "\n\n".join(p.text for p in pages)
+    first = pages[0].text if pages else ""
     kind, lang, title = _type(first), _language(text), _title(first)
     orgs = _unique([f"{m.group(1).strip()} {m.group(2)}" for m in _ORGANIZATION.finditer(text)])
     people = _unique([m.group(1) for m in _PERSON.finditer(text)])
     amounts, dates = _amounts(text), _dates(text)
-    hits = find_injections([PageText(p.number, join_gaps(p.text)) for p in pages])
+    hits = find_injections(pages)
 
     points = [f"Typ dokumentu: {kind}.", f"Język dokumentu: {lang}."]
     if title:
