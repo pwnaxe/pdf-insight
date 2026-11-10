@@ -57,3 +57,12 @@ def test_llm_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_invalid_reasoning_effort() -> None:
     with pytest.raises(ValidationError):
         make(llm_reasoning_effort="extreme")
+
+
+@pytest.mark.parametrize("effort", ["none", "minimal", "low", "medium", "high", "xhigh"])
+def test_reasoning_effort_values(effort: str) -> None:
+    assert make(llm_reasoning_effort=effort).llm_reasoning_effort == effort
+
+
+def test_chunk_chars_default() -> None:
+    assert make().chunk_chars == 12_000

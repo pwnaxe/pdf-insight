@@ -16,12 +16,12 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 4000
     llm_timeout_s: float = 25
     llm_temperature: float | None = None
-    llm_reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = None
+    llm_reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] | None = None
     allowed_origins: str = "https://pwnaxe.github.io"
     max_file_mb: int = 10
     max_pages: int = 100
     max_text_chars: int = 400_000
-    chunk_chars: int = 24_000
+    chunk_chars: int = 12_000
     max_chunks: int = 12
     rate_limit_per_10min: int = 15
     trust_proxy: bool = False
