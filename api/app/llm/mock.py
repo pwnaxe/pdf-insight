@@ -82,7 +82,7 @@ def _context(text: str, start: int) -> str:
 
 
 def _cap(amounts: list[Amount]) -> list[Amount]:
-    # One amount per currency is kept first so a long PLN list does not hide the rest.
+    # keep one amount per currency first so a long PLN list does not hide the rest
     seen: set[tuple[str, str]] = set()
     useful = []
     for amount in amounts:
