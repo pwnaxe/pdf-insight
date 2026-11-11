@@ -4,7 +4,7 @@ from datetime import date
 
 from app.injection import find_injections
 from app.pdf import PageText
-from app.schemas import Amount, ChunkOutput, DatedItem, Entities, FinalOutput, ModelOutput
+from app.schemas import Amount, ChunkOutput, DateMention, Entities, FinalOutput, ModelOutput
 
 _MONTHS = {
     "stycznia": 1,
@@ -30,8 +30,27 @@ _AMOUNT = re.compile(
     re.IGNORECASE,
 )
 _NUMERIC_DATE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
+_OUTPUT_LANG = re.compile(r"^Output language: (pl|en)\b", re.MULTILINE)
+_MONTH_NOMINATIVE = {
+    "styczeń": 1,
+    "luty": 2,
+    "marzec": 3,
+    "kwiecień": 4,
+    "maj": 5,
+    "czerwiec": 6,
+    "lipiec": 7,
+    "sierpień": 8,
+    "wrzesień": 9,
+    "październik": 10,
+    "listopad": 11,
+    "grudzień": 12,
+}
 _ISO_DATE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
 _TEXT_DATE = re.compile(rf"\b(\d{{1,2}})\s+({'|'.join(_MONTHS)})\s+(\d{{4}})\b", re.IGNORECASE)
+_MONTH_YEAR = re.compile(
+    rf"\b({'|'.join([*_MONTHS, *_MONTH_NOMINATIVE])})\s+(\d{{4}})\b", re.IGNORECASE
+)
+_YEAR_ONLY = re.compile(r"\broku\s+(\d{4})\b", re.IGNORECASE)
 _ORGANIZATION = re.compile(r"((?:[A-ZĄĆĘŁŃÓŚŹŻ][\wąćęłńóśźż&-]*[ \t]+){1,4})(sp\. z o\.o\.|S\.A\.)")
 _PERSON = re.compile(r"\b([A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+ [A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)\s+—\s")
 _WORD = re.compile(r"[^\W\d_]{6,}")
@@ -48,6 +67,11 @@ _TYPE_WORDS = [
     ("contract", "umowa"),
     ("offer", "oferta"),
     ("report", "raport"),
+]
+_SUBTYPES = [
+    (re.compile(r"\b(?:cv|curriculum vitae|resume|życiorys)\b", re.IGNORECASE), "cv"),
+    (re.compile(r"\bregulamin\b", re.IGNORECASE), "regulamin"),
+    (re.compile(r"\bprotok[oó][lł]\b", re.IGNORECASE), "protokol"),
 ]
 _SENTENCE_END = re.compile(r"[.!?;]\s+|\n")
 _CONTEXT_NOISE = re.compile(
@@ -109,30 +133,42 @@ def _amounts(text: str) -> list[Amount]:
     return _cap(list(found.values()))
 
 
-def _dates(text: str) -> list[DatedItem]:
-    found: dict[str, DatedItem] = {}
+def _dates(text: str) -> list[DateMention]:
+    found: dict[str, DateMention] = {}
 
-    def add(year: int, month: int, day: int, start: int) -> None:
+    def add(iso: str, precision: str, start: int) -> None:
+        found.setdefault(
+            iso, DateMention(date=iso, precision=precision, context=_context(text, start))
+        )
+
+    full: list[tuple[int, int, int, int, int]] = []
+    for m in _NUMERIC_DATE.finditer(text):
+        full.append((m.start(), m.end(), int(m.group(3)), int(m.group(2)), int(m.group(1))))
+    for m in _ISO_DATE.finditer(text):
+        full.append((m.start(), m.end(), int(m.group(1)), int(m.group(2)), int(m.group(3))))
+    for m in _TEXT_DATE.finditer(text):
+        month = _MONTHS[m.group(2).lower()]
+        full.append((m.start(), m.end(), int(m.group(3)), month, int(m.group(1))))
+
+    candidates: list[tuple[int, str, str]] = []
+    for start, _, year, month, day in full:
         try:
-            iso = date(year, month, day).isoformat()
+            candidates.append((start, date(year, month, day).isoformat(), "day"))
         except ValueError:
-            return
-        found.setdefault(iso, DatedItem(date=iso, context=_context(text, start)))
-
-    candidates = [
-        (m.start(), int(m.group(3)), int(m.group(2)), int(m.group(1)))
-        for m in _NUMERIC_DATE.finditer(text)
-    ]
-    candidates += [
-        (m.start(), int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        for m in _ISO_DATE.finditer(text)
-    ]
-    candidates += [
-        (m.start(), int(m.group(3)), _MONTHS[m.group(2).lower()], int(m.group(1)))
-        for m in _TEXT_DATE.finditer(text)
-    ]
-    for start, year, month, day in sorted(candidates):
-        add(year, month, day, start)
+            continue
+    spans = [(start, end) for start, end, *_ in full]
+    for m in _MONTH_YEAR.finditer(text):
+        if any(
+            start <= m.start() < end or m.start() < end and start < m.end() for start, end in spans
+        ):
+            continue
+        name = m.group(1).lower()
+        month = _MONTHS.get(name) or _MONTH_NOMINATIVE[name]
+        candidates.append((m.start(), f"{int(m.group(2)):04d}-{month:02d}", "month"))
+    for m in _YEAR_ONLY.finditer(text):
+        candidates.append((m.start(), m.group(1), "year"))
+    for start, iso, precision in sorted(candidates):
+        add(iso, precision, start)
     return list(found.values())[:_LIMIT]
 
 
@@ -154,6 +190,10 @@ def _type(first_page: str) -> str:
     return min(hits)[1] if hits else "inne"
 
 
+def _subtype(first_page: str) -> str | None:
+    return next((label for pattern, label in _SUBTYPES if pattern.search(first_page)), None)
+
+
 def _title(text: str) -> str | None:
     for line in text.split("\n"):
         if len(line.strip()) >= 8 and re.search(r"[^\W\d_]{3}", line):
@@ -164,6 +204,34 @@ def _title(text: str) -> str | None:
 def _keywords(text: str) -> list[str]:
     words = Counter(w.lower() for w in _WORD.findall(text))
     return [word for word, _ in words.most_common(8)]
+
+
+_TEXTS = {
+    "pl": {
+        "type": "Typ dokumentu: {}.",
+        "language": "Język dokumentu: {}.",
+        "title": "Tytuł: {}",
+        "orgs": "Organizacje: {}",
+        "amount": "Pierwsza kwota: {:.2f} {}",
+        "date": "Pierwsza data: {}",
+        "pages": "Liczba stron z tekstem: {}",
+        "fragments": "Liczba przeanalizowanych fragmentów: {}",
+        "combined": "Dokument obejmuje {} fragmentów przeanalizowanych osobno. {}",
+        "no_data": "Brak danych.",
+    },
+    "en": {
+        "type": "Document type: {}.",
+        "language": "Document language: {}.",
+        "title": "Title: {}",
+        "orgs": "Organizations: {}",
+        "amount": "First amount: {:.2f} {}",
+        "date": "First date: {}",
+        "pages": "Pages with text: {}",
+        "fragments": "Fragments analysed: {}",
+        "combined": "The document spans {} fragments analysed separately. {}",
+        "no_data": "No data.",
+    },
+}
 
 
 def _summary(
@@ -191,35 +259,42 @@ def _summary(
     return " ".join(parts)
 
 
-def _extract(user: str) -> dict:
+def _output_lang(system: str) -> str:
+    match = _OUTPUT_LANG.search(system)
+    return match.group(1) if match else "pl"
+
+
+def _extract(user: str, out_lang: str) -> dict:
+    texts = _TEXTS[out_lang]
     pages = _pages(user)
     text = "\n\n".join(p.text for p in pages)
     first = pages[0].text if pages else ""
     kind, lang, title = _type(first), _language(text), _title(first)
+    subtype = _subtype(first) if kind == "inne" else None
     orgs = _unique([f"{m.group(1).strip()} {m.group(2)}" for m in _ORGANIZATION.finditer(text)])
     people = _unique([m.group(1) for m in _PERSON.finditer(text)])
     amounts, dates = _amounts(text), _dates(text)
     hits = find_injections(pages)
 
-    points = [f"Typ dokumentu: {kind}.", f"Język dokumentu: {lang}."]
+    points = [texts["type"].format(kind), texts["language"].format(lang)]
     if title:
-        points.append(f"Tytuł: {title}")
+        points.append(texts["title"].format(title))
     if orgs:
-        points.append(f"Organizacje: {', '.join(orgs[:3])}")
+        points.append(texts["orgs"].format(", ".join(orgs[:3])))
     if amounts:
-        first_amount = amounts[0]
-        points.append(f"Pierwsza kwota: {first_amount.value:.2f} {first_amount.currency}")
+        points.append(texts["amount"].format(amounts[0].value, amounts[0].currency))
     if dates:
-        points.append(f"Pierwsza data: {dates[0].date}")
+        points.append(texts["date"].format(dates[0].date))
     while len(points) < 3:
-        points.append(f"Liczba stron z tekstem: {len(pages)}")
+        points.append(texts["pages"].format(len(pages)))
 
     return {
         "language": lang,
         "type": kind,
+        "subtype": subtype,
         "title": title,
-        "date": dates[0].date if dates else None,
-        "summary": _summary(kind, title, orgs, amounts, len(dates), lang),
+        "date": next((d.date for d in dates if d.precision == "day"), None),
+        "summary": _summary(kind, title, orgs, amounts, len(dates), out_lang),
         "key_points": points,
         "entities": Entities(organizations=orgs, people=people),
         "amounts": amounts,
@@ -230,7 +305,8 @@ def _extract(user: str) -> dict:
     }
 
 
-def _final(user: str) -> FinalOutput:
+def _final(user: str, out_lang: str) -> FinalOutput:
+    texts = _TEXTS[out_lang]
     body = _DOCUMENT.search(user)
     text = body.group(1) if body else user
     fragments = re.findall(r"\[fragment \d+\]\n(.*?)(?=\n\n\[)", text, re.DOTALL)
@@ -240,9 +316,9 @@ def _final(user: str) -> FinalOutput:
         if line.startswith("- ")
     ]
     while len(points) < 3:
-        points.append(f"Liczba przeanalizowanych fragmentów: {len(fragments)}")
-    first = fragments[0] if fragments else "Brak danych."
-    summary = f"Dokument obejmuje {len(fragments)} fragmentów przeanalizowanych osobno. {first}"
+        points.append(texts["fragments"].format(len(fragments)))
+    first = fragments[0] if fragments else texts["no_data"]
+    summary = texts["combined"].format(len(fragments), first)
     return FinalOutput(summary=summary, key_points=points[:7])
 
 
@@ -252,15 +328,15 @@ class MockProvider:
     async def complete_json(
         self, system: str, user: str, schema_name: str, json_schema: dict
     ) -> str:
+        out_lang = _output_lang(system)
         if schema_name == "final":
-            return _final(user).model_dump_json(by_alias=True)
+            return _final(user, out_lang).model_dump_json(by_alias=True)
+        data = _extract(user, out_lang)
         if schema_name == "summary":
-            data = _extract(user)
             return FinalOutput(
                 summary=data["summary"], key_points=data["key_points"][:7]
             ).model_dump_json(by_alias=True)
         model = ChunkOutput if schema_name == "chunk" else ModelOutput
-        data = _extract(user)
         if schema_name == "chunk":
             data["key_points"] = data["key_points"][:5]
         return model(**data).model_dump_json(by_alias=True)
