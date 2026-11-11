@@ -28,7 +28,7 @@ class InjectionHit:
     snippet: str
 
 
-def _join_gaps(text: str) -> str:
+def join_gaps(text: str) -> str:
     def repl(match: re.Match[str]) -> str:
         char = match.group(1)
         return char if char.isalpha() else match.group(0)
@@ -49,7 +49,7 @@ def _fold(text: str) -> str:
 def find_injections(pages: list[PageText]) -> list[InjectionHit]:
     hits: list[InjectionHit] = []
     for page in pages:
-        text = _join_gaps(page.text)
+        text = join_gaps(page.text)
         folded = _fold(text)
         starts = [m.start() for rule in _RULES for m in rule.finditer(folded)]
         if starts:
