@@ -68,7 +68,7 @@ export function clearHistory(storage: Storage = localStorage): HistoryEntry[] {
   try {
     storage.removeItem(HISTORY_KEY);
   } catch {
-    // Nothing to clean up when storage is unavailable.
+    // storage disabled
   }
   return [];
 }

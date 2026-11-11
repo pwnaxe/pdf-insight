@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 
 class SlidingWindowLimiter:
-    # Per-process only: with several workers or containers each one keeps its own counters.
+    # per-process only: with several workers or containers each one keeps its own counters.
 
     def __init__(
         self, limit: int, window_s: float, clock: Callable[[], float] = time.monotonic
