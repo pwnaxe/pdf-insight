@@ -10,7 +10,7 @@ a guarantee, and an embedded instruction in the PDF may try to plant values too.
 
 - After merge and before the final validation, `grounding.py` checks every amount, date,
   person, organisation and `document.date` against the extracted text of all pages. Items that
-  are not found are dropped (`document.date` becomes `null`). One localized warning states the
+  are not found are dropped (`document.date` becomes `null`). One warning (in the document language) states the
   number of dropped items, and only when it is above zero.
 - Amounts: every number in the text goes into an index, normalised to two decimals. Thousands
   separators (space, no-break space, narrow no-break space, thin space, dot, comma,
