@@ -1,11 +1,14 @@
 import logging
 import math
 import time
+import tomllib
+from pathlib import Path
 
 from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -17,11 +20,31 @@ from app.pdf import extract_pdf
 from app.pipeline import analyze_document
 from app.ratelimit import SlidingWindowLimiter
 from app.schemas import AnalysisResult
+from app.security_headers import SecurityHeadersMiddleware, apply_security_headers
 
 logger = logging.getLogger("pdf_insight")
 
 READ_CHUNK = 1024 * 1024
 RATE_WINDOW_S = 600
+REPO_URL = "https://github.com/pwnaxe/pdf-insight"
+API_NAME = "pdf-insight-api"
+
+
+def _app_version() -> str:
+    # the Docker image installs dependencies only, not the project, so metadata is unavailable
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    try:
+        return tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return "unknown"
+
+
+def _http_error_code(status: int) -> str:
+    if status == 404:
+        return "NOT_FOUND"
+    if status == 405:
+        return "METHOD_NOT_ALLOWED"
+    return "VALIDATION_ERROR" if status < 500 else "INTERNAL_ERROR"
 
 
 def _error_response(
@@ -60,15 +83,21 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
     settings = settings or get_settings()
     provider = provider or build_provider(settings)
     limiter = SlidingWindowLimiter(settings.rate_limit_per_10min, RATE_WINDOW_S)
-    app = FastAPI(title="PDF Insight API")
+    # the interactive docs expose the schema, so they are dev-only
+    docs = (
+        {} if settings.env == "dev" else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    )
+    app = FastAPI(title="PDF Insight API", version=_app_version(), **docs)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.origins,
         allow_methods=["POST", "GET"],
-        allow_headers=["*"],
+        # the client sends a multipart POST with no custom headers; CORS-safelisted ones always pass
+        allow_headers=[],
         allow_credentials=False,
     )
+    app.add_middleware(SecurityHeadersMiddleware)
 
     @app.exception_handler(ApiError)
     async def api_error(_: Request, exc: ApiError) -> JSONResponse:
@@ -81,12 +110,34 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
-        return _error_response(exc.status_code, "HTTP_ERROR", error_message("HTTP_ERROR", "en"))
+        code = _http_error_code(exc.status_code)
+        headers = (
+            {"Allow": exc.headers["Allow"]} if exc.headers and "Allow" in exc.headers else None
+        )
+        return _error_response(exc.status_code, code, error_message(code, "en"), headers)
 
     @app.exception_handler(Exception)
-    async def unexpected_error(_: Request, exc: Exception) -> JSONResponse:
+    async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         logger.error("unhandled error: %s", type(exc).__name__)
-        return _error_response(500, "INTERNAL_ERROR", error_message("INTERNAL_ERROR", "en"))
+        response = _error_response(500, "INTERNAL_ERROR", error_message("INTERNAL_ERROR", "en"))
+        # this response is built outside the user middleware stack, so add the headers here
+        apply_security_headers(response.headers, request.url.path)
+        return response
+
+    @app.get("/", include_in_schema=False)
+    def root() -> dict[str, object]:
+        endpoints = sorted(
+            f"{method} {route.path}"
+            for route in app.routes
+            if isinstance(route, APIRoute) and route.path != "/"
+            for method in route.methods - {"HEAD", "OPTIONS"}
+        )
+        return {
+            "name": API_NAME,
+            "version": _app_version(),
+            "endpoints": endpoints,
+            "repo": REPO_URL,
+        }
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -121,7 +172,9 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
             data = await _read_capped(file, limit, _too_large(settings, language))
 
             if not data.startswith(b"%PDF-") or not _is_pdf_upload(file):
-                raise ApiError("NOT_PDF", error_message("NOT_PDF", language), 415)
+                raise ApiError(
+                    "UNSUPPORTED_MEDIA_TYPE", error_message("UNSUPPORTED_MEDIA_TYPE", language), 415
+                )
 
             extracted = await run_in_threadpool(
                 extract_pdf, data, settings.max_pages, settings.max_text_chars, language
