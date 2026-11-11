@@ -3,7 +3,7 @@ from collections import Counter
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-from app.schemas import Amount, ChunkOutput, DatedItem, DocumentType
+from app.schemas import Amount, ChunkOutput, DateMention, DocumentType, date_precision
 
 MAX_KEYWORDS = 12
 MAX_AMOUNTS = 20
@@ -15,12 +15,13 @@ SIMILAR_CONTEXT = 0.85
 class MergedExtraction:
     language: str
     type: DocumentType
+    subtype: str | None
     title: str | None
     date: str | None
     organizations: list[str]
     people: list[str]
     amounts: list[Amount]
-    dates: list[DatedItem]
+    dates: list[DateMention]
     keywords: list[str]
     summaries: list[str]
     key_points: list[str]
@@ -88,17 +89,19 @@ def merge_chunk_outputs(outputs: list[ChunkOutput]) -> MergedExtraction:
         raise ValueError("nothing to merge")
 
     amounts: list[Amount] = []
-    dates: dict[tuple[str, str], DatedItem] = {}
+    dates: dict[tuple[str, str], DateMention] = {}
     for out in outputs:
         amounts.extend(out.amounts)
         for item in out.dates:
             dates.setdefault((item.date, _norm(item.context)), item)
 
+    kind = _most_common([o.type for o in outputs])
     return MergedExtraction(
         language=_most_common([o.language for o in outputs]),
-        type=_most_common([o.type for o in outputs]),
+        type=kind,
+        subtype=next((o.subtype for o in outputs if o.subtype and o.type == kind), None),
         title=next((o.title for o in outputs if o.title), None),
-        date=next((o.date for o in outputs if o.date), None),
+        date=next((o.date for o in outputs if o.date and date_precision(o.date) == "day"), None),
         organizations=_dedupe_organizations([n for o in outputs for n in o.entities.organizations]),
         people=_dedupe([n for o in outputs for n in o.entities.people]),
         amounts=_merge_amounts(amounts)[:MAX_AMOUNTS],

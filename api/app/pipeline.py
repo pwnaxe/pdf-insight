@@ -9,10 +9,17 @@ from pydantic import BaseModel, ValidationError
 from app.chunking import chunk_pages
 from app.config import Settings
 from app.errors import ApiError
+from app.grounding import ground_fields
 from app.injection import InjectionHit, find_injections
 from app.llm import LLMError, LLMProvider, LLMTimeout
 from app.merge import merge_chunk_outputs
 from app.messages import DEFAULT_LANG, Lang, error_message, warning_message
+from app.normalize import (
+    normalise_amounts,
+    normalise_dates,
+    normalise_document_date,
+    normalise_subtype,
+)
 from app.pdf import ExtractedPdf, PageText
 from app.prompts import document_user_prompt, final_user_prompt, retry_user_prompt, system_prompt
 from app.schemas import (
@@ -84,7 +91,7 @@ async def _call[T: BaseModel](
     check: Check | None = None,
     lang: Lang = DEFAULT_LANG,
 ) -> T:
-    system = system_prompt(schema_name)
+    system = system_prompt(schema_name, lang)
     schema = model.model_json_schema()
     prompt = user
     for attempt in range(2):
@@ -131,6 +138,7 @@ def _warnings(
     truncated: bool,
     injection_pages: list[int],
     model_flag: bool,
+    dropped: int,
     lang: Lang,
 ) -> list[str]:
     warnings: list[str] = []
@@ -147,6 +155,8 @@ def _warnings(
         )
     if truncated:
         warnings.append(warning_message("truncated", lang))
+    if dropped:
+        warnings.append(warning_message("dropped", lang, count=dropped))
     return warnings
 
 
@@ -165,7 +175,7 @@ async def analyze_document(
         out = await _call(
             provider, "analysis", ModelOutput, document_user_prompt(plan.chunks[0]), check, lang
         )
-        fields = out.model_dump()
+        fields = dict(out)
         fields.pop("injection_detected")
         fields.pop("injection_quotes")
         model_flag = out.injection_detected
@@ -199,6 +209,7 @@ async def analyze_document(
         fields = {
             "language": merged.language,
             "type": merged.type,
+            "subtype": merged.subtype,
             "title": merged.title,
             "date": merged.date,
             "summary": final.summary,
@@ -210,9 +221,24 @@ async def analyze_document(
         }
         model_flag = merged.injection_detected
 
+    entities: Entities = fields["entities"]
+    grounded = ground_fields(
+        extracted.pages,
+        normalise_amounts(fields["amounts"], lang),
+        normalise_dates(fields["dates"]),
+        normalise_document_date(fields["date"]),
+        entities.organizations,
+        entities.people,
+    )
+
     injection_pages = sorted({hit.page for hit in hits})
     warnings = _warnings(
-        extracted, extracted.truncated or plan.truncated, injection_pages, model_flag, lang
+        extracted,
+        extracted.truncated or plan.truncated,
+        injection_pages,
+        model_flag,
+        grounded.dropped,
+        lang,
     )
 
     try:
@@ -222,14 +248,15 @@ async def analyze_document(
                 pages=extracted.page_count,
                 language=fields["language"],
                 type=fields["type"],
+                subtype=normalise_subtype(fields["subtype"]),
                 title=fields["title"],
-                date=fields["date"],
+                date=grounded.document_date,
             ),
             summary=fields["summary"],
             key_points=fields["key_points"],
-            entities=fields["entities"],
-            amounts=fields["amounts"],
-            dates=fields["dates"],
+            entities=Entities(organizations=grounded.organizations, people=grounded.people),
+            amounts=grounded.amounts,
+            dates=grounded.dates,
             keywords=fields["keywords"],
             suspected_injection=bool(hits) or model_flag,
             warnings=warnings,

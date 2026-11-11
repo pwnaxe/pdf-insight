@@ -2,12 +2,16 @@ import re
 from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 DocumentType = Literal["faktura", "umowa", "oferta", "raport", "inne"]
+DatePrecision = Literal["year", "month", "day"]
+
+SUBTYPE_MAX = 30
 
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_FLEX_DATE = re.compile(r"^\d{4}(-\d{2}){0,2}$")
 _LANGUAGE = re.compile(r"^[a-z]{2}$")
 _CURRENCY = re.compile(r"^[A-Z]{3}$")
 
@@ -33,6 +37,17 @@ def _iso_date(value: str) -> str:
     return value
 
 
+def date_precision(value: str) -> DatePrecision | None:
+    if not _FLEX_DATE.match(value):
+        return None
+    parts = [int(part) for part in value.split("-")]
+    try:
+        date(parts[0], parts[1] if len(parts) > 1 else 1, parts[2] if len(parts) > 2 else 1)
+    except ValueError:
+        return None
+    return ("year", "month", "day")[len(parts) - 1]
+
+
 def _language(value: str) -> str:
     if not _LANGUAGE.match(value):
         raise ValueError("language must be a lowercase ISO 639-1 code")
@@ -45,12 +60,18 @@ def _currency(value: str) -> str:
     return value
 
 
+def _subtype(value: str) -> str:
+    if not value or len(value) > SUBTYPE_MAX or value != value.strip() or value != value.lower():
+        raise ValueError(f"subtype must be a lowercase string of 1..{SUBTYPE_MAX} characters")
+    return value
+
+
 def _optional_iso_date(value: str | None) -> str | None:
     return None if value is None else _iso_date(value)
 
 
-IsoDate = Annotated[str, AfterValidator(_iso_date)]
 OptionalIsoDate = Annotated[str | None, AfterValidator(_optional_iso_date)]
+Subtype = Annotated[str, AfterValidator(_subtype)]
 Language = Annotated[str, AfterValidator(_language)]
 Currency = Annotated[str, AfterValidator(_currency)]
 
@@ -92,6 +113,7 @@ class DocumentInfo(CamelModel):
     pages: Annotated[int, Field(ge=1)]
     language: Language
     type: DocumentType
+    subtype: Subtype | None = None
     title: str | None
     date: OptionalIsoDate
 
@@ -108,7 +130,21 @@ class Amount(CamelModel):
 
 
 class DatedItem(CamelModel):
-    date: IsoDate
+    date: str
+    precision: DatePrecision
+    context: str
+
+    @model_validator(mode="after")
+    def _check_date(self) -> "DatedItem":
+        if date_precision(self.date) != self.precision:
+            raise ValueError("date must be YYYY, YYYY-MM or YYYY-MM-DD and match precision")
+        return self
+
+
+class DateMention(CamelModel):
+    # model output: checked and normalised afterwards, so one bad value does not fail the call
+    date: str
+    precision: DatePrecision
     context: str
 
 
@@ -127,13 +163,14 @@ class AnalysisResult(CamelModel):
 class ModelOutput(CamelModel):
     language: Language
     type: DocumentType
+    subtype: str | None
     title: str | None
-    date: OptionalIsoDate
+    date: str | None
     summary: Summary
     key_points: KeyPoints
     entities: Entities
     amounts: list[Amount]
-    dates: list[DatedItem]
+    dates: list[DateMention]
     keywords: list[str]
     injection_detected: bool
     injection_quotes: list[str]
@@ -142,13 +179,14 @@ class ModelOutput(CamelModel):
 class ChunkOutput(CamelModel):
     language: Language
     type: DocumentType
+    subtype: str | None
     title: str | None
-    date: OptionalIsoDate
+    date: str | None
     summary: ChunkSummary
     key_points: list[str]
     entities: Entities
     amounts: list[Amount]
-    dates: list[DatedItem]
+    dates: list[DateMention]
     keywords: list[str]
     injection_detected: bool
     injection_quotes: list[str]

@@ -1,13 +1,14 @@
 import pytest
 
 from app.merge import merge_chunk_outputs
-from app.schemas import Amount, ChunkOutput, DatedItem, Entities
+from app.schemas import Amount, ChunkOutput, DateMention, Entities
 
 
 def chunk(**overrides: object) -> ChunkOutput:
     base = {
         "language": "pl",
         "type": "umowa",
+        "subtype": None,
         "title": None,
         "date": None,
         "summary": "Zdanie.",
@@ -64,7 +65,7 @@ def test_organization_suffix_variants(suffix: str) -> None:
 def test_amounts_and_dates_dedupe() -> None:
     a = chunk(
         amounts=[Amount(value=10.0, currency="PLN", context="Opłata  roczna")],
-        dates=[DatedItem(date="2026-03-12", context="Zawarcie")],
+        dates=[DateMention(date="2026-03-12", precision="day", context="Zawarcie")],
     )
     b = chunk(
         amounts=[
@@ -72,8 +73,8 @@ def test_amounts_and_dates_dedupe() -> None:
             Amount(value=10.0, currency="EUR", context="opłata roczna"),
         ],
         dates=[
-            DatedItem(date="2026-03-12", context="zawarcie"),
-            DatedItem(date="2026-03-13", context="zawarcie"),
+            DateMention(date="2026-03-12", precision="day", context="zawarcie"),
+            DateMention(date="2026-03-13", precision="day", context="zawarcie"),
         ],
     )
     merged = merge_chunk_outputs([a, b])
@@ -152,7 +153,10 @@ def test_amounts_near_identical_context_deduped() -> None:
 
 def test_amounts_and_dates_capped_in_document_order() -> None:
     amounts = [Amount(value=float(i), currency="PLN", context=f"pozycja {i}") for i in range(30)]
-    dates = [DatedItem(date=f"2026-01-{i:02d}", context=f"termin {i}") for i in range(1, 29)]
+    dates = [
+        DateMention(date=f"2026-01-{i:02d}", precision="day", context=f"termin {i}")
+        for i in range(1, 29)
+    ]
     merged = merge_chunk_outputs(
         [
             chunk(amounts=amounts[:15], dates=dates[:14]),
