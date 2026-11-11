@@ -20,26 +20,26 @@ beforeEach(() => {
   document.documentElement.lang = '';
 });
 
-test('defaults to Polish and sets the html lang', () => {
+test('defaults to English and sets the html lang', () => {
   const { result } = renderHook(() => useI18n(), { wrapper });
-  expect(result.current.lang).toBe('pl');
-  expect(result.current.t.chooseFile).toBe('Wybierz plik');
-  expect(document.documentElement.lang).toBe('pl');
+  expect(result.current.lang).toBe('en');
+  expect(result.current.t.chooseFile).toBe('Choose file');
+  expect(document.documentElement.lang).toBe('en');
 });
 
 test('persists the choice and keeps html lang in sync', () => {
   const { result } = renderHook(() => useI18n(), { wrapper });
-  act(() => result.current.setLang('en'));
-  expect(result.current.t.chooseFile).toBe('Choose file');
-  expect(localStorage.getItem(LANG_STORAGE_KEY)).toBe('en');
-  expect(document.documentElement.lang).toBe('en');
+  act(() => result.current.setLang('pl'));
+  expect(result.current.t.chooseFile).toBe('Wybierz plik');
+  expect(localStorage.getItem(LANG_STORAGE_KEY)).toBe('pl');
+  expect(document.documentElement.lang).toBe('pl');
 });
 
 test('restores the stored language', () => {
-  localStorage.setItem(LANG_STORAGE_KEY, 'en');
+  localStorage.setItem(LANG_STORAGE_KEY, 'pl');
   const { result } = renderHook(() => useI18n(), { wrapper });
-  expect(result.current.lang).toBe('en');
-  expect(document.documentElement.lang).toBe('en');
+  expect(result.current.lang).toBe('pl');
+  expect(document.documentElement.lang).toBe('pl');
 });
 
 test('ignores an invalid stored value', () => {
@@ -52,7 +52,7 @@ test('maps languages to locales', () => {
   expect(localeFor('pl')).toBe('pl-PL');
   expect(localeFor('en')).toBe('en-GB');
   expect(parseLang('en')).toBe('en');
-  expect(parseLang(undefined)).toBe('pl');
+  expect(parseLang(undefined)).toBe('en');
 });
 
 test('both dictionaries cover the same error codes', () => {

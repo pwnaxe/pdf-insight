@@ -106,7 +106,7 @@ JSON keys are camelCase.
 
 ## Language
 
-The UI is Polish by default with an English toggle (PL / EN in the header). The choice is kept in
+The UI is English by default with a Polish toggle (PL / EN in the header). The choice is kept in
 `localStorage` (`pdf-insight:lang`) and the dictionaries live in `web/src/lib/i18n.ts`. The web app
 sends the current language as the optional multipart field `lang` (`pl` or `en`; anything else means
 `pl`), and the API words its warnings and error messages in that language

@@ -36,7 +36,7 @@ API (run in `api/`):
 ## Conventions
 - TypeScript is strict. No `any`. No `console.log`.
 - Python: ruff, line length 100, Python 3.12.
-- UI language: Polish by default, English toggle. Texts live in `web/src/lib/i18n.ts` (web) and
+- UI language: English by default, Polish toggle. Texts live in `web/src/lib/i18n.ts` (web) and
   `api/app/messages.py` (API warnings and errors); add every new text to both languages.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`).
 - Branch flow: `feature/*` -> `develop` -> `main`, each step by pull request.
