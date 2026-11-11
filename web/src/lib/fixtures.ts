@@ -30,5 +30,5 @@ export const validResult: AnalysisResult = {
   dates: [{ date: '2026-03-12', context: 'data zawarcia umowy' }],
   keywords: ['umowa', 'wdrożenie', 'licencja'],
   suspectedInjection: true,
-  warnings: ['Strony bez warstwy tekstowej (pominięte): 11.'],
+  warnings: ['Pages without a text layer (skipped): 11.'],
 };
