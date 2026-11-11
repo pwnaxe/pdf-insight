@@ -46,15 +46,13 @@ def _open(data: bytes) -> PdfReader:
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
-            raise PdfError(
-                "PDF_ENCRYPTED", "Ten PDF jest zaszyfrowany i nie można go odczytać.", 422
-            )
+            raise PdfError("PDF_ENCRYPTED", "This PDF is encrypted and cannot be read.", 422)
         reader.pages[0:0]
     except PdfError:
         raise
     except (PyPdfError, ValueError, KeyError, TypeError, OSError, RecursionError) as exc:
         raise PdfError(
-            "PDF_INVALID", "Nie udało się odczytać pliku PDF. Plik jest uszkodzony.", 422
+            "PDF_INVALID", "Could not read the PDF file. The file is damaged.", 422
         ) from exc
     return reader
 
@@ -99,13 +97,13 @@ def extract_pdf(data: bytes, max_pages: int, max_chars: int) -> ExtractedPdf:
         RecursionError,
     ) as exc:
         raise PdfError(
-            "PDF_INVALID", "Nie udało się odczytać pliku PDF. Plik jest uszkodzony.", 422
+            "PDF_INVALID", "Could not read the PDF file. The file is damaged.", 422
         ) from exc
 
     if not pages and not truncated:
         raise PdfError(
             "NO_TEXT",
-            "Ten PDF nie ma warstwy tekstowej (prawdopodobnie skan). OCR nie jest obsługiwany.",
+            "This PDF has no text layer (probably a scan). OCR is not supported.",
             422,
         )
     return ExtractedPdf(page_count, pages, without_text, truncated)

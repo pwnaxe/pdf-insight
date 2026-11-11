@@ -101,7 +101,7 @@ Defined twice, kept in sync by hand:
 - [web/src/lib/schema.ts](web/src/lib/schema.ts) (Zod)
 
 Besides the fields from the brief there are two added ones: `suspectedInjection` (bool) and
-`warnings` (list of messages in Polish for the user: injection, pages without text, truncation).
+`warnings` (list of messages in English for the user: injection, pages without text, truncation).
 JSON keys are camelCase.
 
 ## Running locally

@@ -90,11 +90,11 @@ async def _call[T: BaseModel](
             raw = await provider.complete_json(system, prompt, schema_name, schema)
         except (LLMTimeout, TimeoutError) as exc:
             raise ApiError(
-                "AI_TIMEOUT", "Model AI nie odpowiedział w wymaganym czasie. Spróbuj ponownie.", 504
+                "AI_TIMEOUT", "The AI model did not respond in time. Try again.", 504
             ) from exc
         except LLMError as exc:
             raise ApiError(
-                "AI_ERROR", "Usługa AI jest chwilowo niedostępna. Spróbuj ponownie później.", 502
+                "AI_ERROR", "The AI service is temporarily unavailable. Try again later.", 502
             ) from exc
         try:
             output = model.model_validate(json.loads(raw))
@@ -105,7 +105,7 @@ async def _call[T: BaseModel](
             if problem is None:
                 return output
         if attempt == 1:
-            raise ApiError("AI_INVALID_OUTPUT", "Model AI zwrócił niepoprawną odpowiedź.", 502)
+            raise ApiError("AI_INVALID_OUTPUT", "The AI model returned an invalid response.", 502)
         prompt = retry_user_prompt(user, problem)
     raise AssertionError("unreachable")
 
@@ -131,24 +131,22 @@ def _warnings(
 ) -> list[str]:
     warnings: list[str] = []
     if injection_pages:
-        label = "strona" if len(injection_pages) == 1 else "strony"
+        label = "page" if len(injection_pages) == 1 else "pages"
         warnings.append(
-            "Dokument zawiera tekst, który próbuje wydawać polecenia systemowi AI "
-            f"({label} {_page_list(injection_pages)}). Zignorowano go podczas analizy."
+            "The document contains text that tries to give instructions to an AI system "
+            f"({label} {_page_list(injection_pages)}). It was ignored during analysis."
         )
     elif model_flag:
         warnings.append(
-            "Dokument zawiera tekst, który próbuje wydawać polecenia systemowi AI. "
-            "Zignorowano go podczas analizy."
+            "The document contains text that tries to give instructions to an AI system. "
+            "It was ignored during analysis."
         )
     if extracted.pages_without_text:
         warnings.append(
-            f"Strony bez warstwy tekstowej (pominięte): {_page_list(extracted.pages_without_text)}."
+            f"Pages without a text layer (skipped): {_page_list(extracted.pages_without_text)}."
         )
     if truncated:
-        warnings.append(
-            "Dokument jest bardzo długi, więc przeanalizowano tylko jego początkową część."
-        )
+        warnings.append("The document is very long, so only its initial part was analysed.")
     return warnings
 
 
@@ -231,5 +229,7 @@ async def analyze_document(
             warnings=warnings,
         )
     except ValidationError as exc:
-        raise ApiError("AI_INVALID_OUTPUT", "Model AI zwrócił niepoprawną odpowiedź.", 502) from exc
+        raise ApiError(
+            "AI_INVALID_OUTPUT", "The AI model returned an invalid response.", 502
+        ) from exc
     return AnalysisRun(result, len(plan.chunks))

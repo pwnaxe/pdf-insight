@@ -76,17 +76,17 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, __: RequestValidationError) -> JSONResponse:
         return _error_response(
-            422, "VALIDATION_ERROR", "Nieprawidłowe żądanie. Wyślij plik PDF w polu „file”."
+            422, "VALIDATION_ERROR", "Invalid request. Send a PDF file in the 'file' field."
         )
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
-        return _error_response(exc.status_code, "HTTP_ERROR", "Nie można obsłużyć żądania.")
+        return _error_response(exc.status_code, "HTTP_ERROR", "The request could not be handled.")
 
     @app.exception_handler(Exception)
     async def unexpected_error(_: Request, exc: Exception) -> JSONResponse:
         logger.error("unhandled error: %s", type(exc).__name__)
-        return _error_response(500, "INTERNAL_ERROR", "Wystąpił nieoczekiwany błąd serwera.")
+        return _error_response(500, "INTERNAL_ERROR", "An unexpected server error occurred.")
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -100,13 +100,13 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
         try:
             origin = request.headers.get("origin")
             if origin is not None and origin not in settings.origins:
-                raise ApiError("FORBIDDEN_ORIGIN", "Niedozwolone źródło żądania.", 403)
+                raise ApiError("FORBIDDEN_ORIGIN", "Request origin not allowed.", 403)
 
             retry_after = limiter.check(_client_ip(request, settings))
             if retry_after is not None:
                 raise ApiError(
                     "RATE_LIMITED",
-                    "Zbyt wiele żądań. Spróbuj ponownie za kilka minut.",
+                    "Too many requests. Try again in a few minutes.",
                     429,
                     {"Retry-After": str(math.ceil(retry_after))},
                 )
@@ -118,7 +118,7 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
             data = await _read_capped(file, limit, _too_large(settings))
 
             if not data.startswith(b"%PDF-") or not _is_pdf_upload(file):
-                raise ApiError("NOT_PDF", "To nie jest plik PDF.", 415)
+                raise ApiError("NOT_PDF", "This is not a PDF file.", 415)
 
             extracted = await run_in_threadpool(
                 extract_pdf, data, settings.max_pages, settings.max_text_chars
@@ -147,7 +147,7 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
 
 
 def _too_large(settings: Settings) -> str:
-    return f"Plik jest za duży. Maksymalny rozmiar to {settings.max_file_mb} MB."
+    return f"The file is too large. The maximum size is {settings.max_file_mb} MB."
 
 
 app = create_app()

@@ -130,8 +130,8 @@ async def test_heuristic_flags_injection_even_if_model_does_not() -> None:
     run = await analyze_document(doc, "a.pdf", provider, SETTINGS)
     assert run.result.suspected_injection is True
     assert run.result.warnings[0] == (
-        "Dokument zawiera tekst, który próbuje wydawać polecenia systemowi AI (strona 2). "
-        "Zignorowano go podczas analizy."
+        "The document contains text that tries to give instructions to an AI system (page 2). "
+        "It was ignored during analysis."
     )
 
 
@@ -174,8 +174,8 @@ async def test_model_flag_is_kept() -> None:
 async def test_warnings_for_pages_without_text_and_truncation() -> None:
     doc = ExtractedPdf(3, [PageText(1, "Tekst umowy o wdrożenie.")], [2, 3], True)
     run = await analyze_document(doc, "a.pdf", FakeProvider([model_json()]), SETTINGS)
-    assert run.result.warnings[0] == "Strony bez warstwy tekstowej (pominięte): 2, 3."
-    assert "początkową część" in run.result.warnings[1]
+    assert run.result.warnings[0] == "Pages without a text layer (skipped): 2, 3."
+    assert "initial part" in run.result.warnings[1]
 
 
 async def test_chunked_flow_merges_and_summarises() -> None:
@@ -259,7 +259,7 @@ async def test_too_many_chunks_adds_warning() -> None:
     provider = FakeProvider([chunk_json(), chunk_json(), FINAL])
     run = await analyze_document(doc, "a.pdf", provider, settings)
     assert run.chunks == 2
-    assert any("początkową część" in w for w in run.result.warnings)
+    assert any("initial part" in w for w in run.result.warnings)
 
 
 def test_document_tags_in_text_are_neutralised() -> None:

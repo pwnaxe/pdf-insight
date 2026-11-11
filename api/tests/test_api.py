@@ -53,7 +53,7 @@ def test_blank_pdf(blank_pdf_bytes: bytes) -> None:
     response = post(make_client(), blank_pdf_bytes)
     assert response.status_code == 422
     assert error_code(response) == "NO_TEXT"
-    assert "OCR nie jest obsługiwany" in response.json()["error"]["message"]
+    assert "OCR is not supported" in response.json()["error"]["message"]
 
 
 def test_encrypted_pdf(encrypted_pdf_bytes: bytes) -> None:
@@ -116,8 +116,8 @@ def test_full_flow_with_mock_provider(contract_bytes: bytes, origin: str | None)
     assert body["document"]["type"] == "umowa"
     assert body["document"]["language"] == "pl"
     assert body["suspectedInjection"] is True
-    assert any("Strony bez warstwy tekstowej (pominięte): 11." in w for w in body["warnings"])
-    assert any("polecenia systemowi AI (strona 4)" in w for w in body["warnings"])
+    assert any("Pages without a text layer (skipped): 11." in w for w in body["warnings"])
+    assert any("give instructions to an AI system (page 4)" in w for w in body["warnings"])
     amounts = {(a["value"], a["currency"]) for a in body["amounts"]}
     assert {(184500.0, "PLN"), (226935.0, "PLN"), (2150.0, "EUR"), (890.0, "USD")} <= amounts
     assert len(body["amounts"]) <= 20
