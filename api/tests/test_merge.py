@@ -33,6 +33,34 @@ def test_entities_deduped_keep_first_spelling_and_order() -> None:
     assert merged.people == ["Jan Nowak"]
 
 
+def test_organizations_with_legal_form_merge_keep_full_name() -> None:
+    a = chunk(entities=Entities(organizations=["Nordwave Logistics", "Acme GmbH"], people=[]))
+    b = chunk(
+        entities=Entities(
+            organizations=["Nordwave Logistics sp. z o.o.", "ACME", "Kwadrat Software S.A."],
+            people=[],
+        )
+    )
+    c = chunk(
+        entities=Entities(organizations=["Kwadrat Software", "Foo Ltd", "Foo Inc."], people=[])
+    )
+    merged = merge_chunk_outputs([a, b, c])
+    assert merged.organizations == [
+        "Nordwave Logistics sp. z o.o.",
+        "Acme GmbH",
+        "Kwadrat Software S.A.",
+        "Foo Inc.",
+    ]
+
+
+@pytest.mark.parametrize("suffix", ["sp. j.", "sp. k.", "S.A."])
+def test_organization_suffix_variants(suffix: str) -> None:
+    merged = merge_chunk_outputs(
+        [chunk(entities=Entities(organizations=["Beta", f"Beta {suffix}"], people=[]))]
+    )
+    assert merged.organizations == [f"Beta {suffix}"]
+
+
 def test_amounts_and_dates_dedupe() -> None:
     a = chunk(
         amounts=[Amount(value=10.0, currency="PLN", context="Opłata  roczna")],

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     max_text_chars: int = 400_000
     chunk_chars: int = 12_000
     max_chunks: int = 12
+    direct_summary_chars: int = 150_000
     rate_limit_per_10min: int = 15
     trust_proxy: bool = False
 
