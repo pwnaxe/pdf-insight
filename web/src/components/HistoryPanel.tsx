@@ -25,7 +25,7 @@ export function HistoryPanel({ entries, onOpen, onDelete, onClear }: Props) {
       {entries.length === 0 ? (
         <p className={mutedText}>Brak zapisanych analiz.</p>
       ) : (
-        <ul className="history divide-y divide-slate-200">
+        <ul data-testid="history" className="divide-y divide-slate-200">
           {entries.map((entry) => (
             <li
               key={entry.id}
