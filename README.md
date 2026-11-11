@@ -155,7 +155,8 @@ Web (`web/.env.example`):
 - API: `docker compose up -d --build` in `api/` on the server. The container listens on
   `127.0.0.1:8787`, nginx ([deploy/nginx/pdf-insight-api.conf](deploy/nginx/pdf-insight-api.conf))
   terminates TLS (Let's Encrypt). The OpenAI key lives in a root-only env file outside the repo
-  (`/etc/pdf-insight/api.env`); a server-side `docker-compose.override.yml` points `env_file` at it.
+  (`/etc/pdf-insight/api.env`); a server-side `docker-compose.override.yml` points `env_file` at it
+  (see `api/docker-compose.override.example.yml`).
 
 ## Known limitations
 

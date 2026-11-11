@@ -51,8 +51,11 @@ Check from the command line:
 - `npm audit` in `web/`
 - `uvx pip-audit` in `api/`
 
-Neither runs in CI (`.github/workflows` only has lint, format, typecheck, tests and build for
+Neither audit runs in CI (`.github/workflows` only has lint, format, typecheck, tests and build for
 web, and ruff and pytest for api), so run them by hand now and then.
+
+Dependabot (`.github/dependabot.yml`) opens weekly update PRs for npm, Python deps and GitHub
+Actions.
 
 ## Reporting issues
 
