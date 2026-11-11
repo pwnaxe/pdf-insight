@@ -2,6 +2,12 @@
 
 Upload a PDF, get a summary, key points, entities, amounts and dates as validated JSON.
 
+## Docs
+
+- [Architecture](docs/architecture.md)
+- [Decisions](docs/decisions/)
+- [Security](docs/security.md)
+
 ## Demo
 
 - App: https://pwnaxe.github.io/pdf-insight/
