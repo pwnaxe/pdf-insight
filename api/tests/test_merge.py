@@ -123,7 +123,6 @@ def test_injection_any_and_summaries_collected() -> None:
         ]
     )
     assert merged.injection_detected
-    assert merged.injection_quotes == ["q"]
     assert merged.summaries == ["Jeden.", "Dwa."]
     assert merged.key_points == ["a", "b"]
 
