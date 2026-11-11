@@ -17,13 +17,14 @@ def model_json(**overrides: object) -> str:
     data = {
         "language": "pl",
         "type": "umowa",
+        "subtype": None,
         "title": "Umowa",
         "date": "2026-03-12",
         "summary": "Pierwsze zdanie. Drugie zdanie. Trzecie zdanie.",
         "keyPoints": ["a", "b", "c"],
         "entities": {"organizations": ["Firma sp. z o.o."], "people": []},
         "amounts": [{"value": 100.0, "currency": "PLN", "context": "cena"}],
-        "dates": [{"date": "2026-03-12", "context": "zawarcie"}],
+        "dates": [{"date": "2026-03-12", "precision": "day", "context": "zawarcie"}],
         "keywords": ["umowa"],
         "injectionDetected": False,
         "injectionQuotes": [],
@@ -76,7 +77,7 @@ def extracted(*texts: str, without_text: list[int] | None = None) -> ExtractedPd
 
 
 SETTINGS = Settings(chunk_chars=100, max_chunks=5)
-ONE_PAGE = extracted("Zwykły tekst umowy o wdrożenie systemu.")
+ONE_PAGE = extracted("12.03.2026 Firma sp. z o.o. 100 PLN 5 PLN 1 maja 2026 marzec 2026")
 
 
 async def test_single_call() -> None:
@@ -198,7 +199,7 @@ async def test_warnings_for_pages_without_text_and_truncation_in_polish() -> Non
 
 
 async def test_chunked_flow_merges_and_summarises() -> None:
-    doc = extracted("a" * 80, "b" * 80, "c" * 80)
+    doc = extracted("Firma sp. z o.o. 100 PLN 12.03.2026 " + "a" * 40, "b" * 80, "c" * 80)
     provider = FakeProvider([chunk_json(), chunk_json(), chunk_json(), FINAL])
     settings = Settings(chunk_chars=100, max_chunks=5, direct_summary_chars=100)
     run = await analyze_document(doc, "a.pdf", provider, settings)
@@ -312,3 +313,88 @@ async def test_summary_with_normal_payment_terms_passes_echo_check(contract_byte
     assert len(provider.calls) == 1
     assert run.result.suspected_injection is True
     assert run.result.summary == summary
+
+
+async def test_lang_reaches_every_call_in_chunked_flow() -> None:
+    pages = extracted(*["Zwykły tekst umowy o wdrożenie systemu."] * 3)
+    for lang in ("pl", "en"):
+        provider = KeyedProvider(
+            {"chunk": [chunk_json()] * 3, "summary": [SUMMARY], "final": [FINAL]}
+        )
+        await analyze_document(pages, "a.pdf", provider, Settings(chunk_chars=60), lang)
+        assert {name for name, _, _ in provider.calls} >= {"chunk", "summary"}
+        assert all(f"Output language: {lang}" in system for _, system, _ in provider.calls)
+
+
+async def test_lang_reaches_single_and_final_calls() -> None:
+    provider = FakeProvider([model_json()])
+    await analyze_document(ONE_PAGE, "a.pdf", provider, SETTINGS, "en")
+    assert provider.calls[0][0] == "analysis"
+    assert "Output language: en (English)" in provider.calls[0][1]
+
+    pages = extracted(*["Zwykły tekst umowy o wdrożenie systemu."] * 3)
+    provider = KeyedProvider({"chunk": [chunk_json()] * 3, "final": [FINAL]})
+    settings = Settings(chunk_chars=60, direct_summary_chars=10)
+    await analyze_document(pages, "a.pdf", provider, settings, "pl")
+    assert {name for name, _, _ in provider.calls} == {"chunk", "final"}
+    assert all("Output language: pl (Polish)" in system for _, system, _ in provider.calls)
+
+
+async def test_lang_defaults_to_polish() -> None:
+    provider = FakeProvider([model_json()])
+    await analyze_document(ONE_PAGE, "a.pdf", provider, SETTINGS)
+    assert "Output language: pl" in provider.calls[0][1]
+
+
+async def test_dates_subtype_and_contexts_are_normalised() -> None:
+    reply = model_json(
+        subtype=" CV ",
+        date="2026-03",
+        dates=[
+            {"date": "2026-03", "precision": "day", "context": "marzec 2026"},
+            {"date": "2026-02-30", "precision": "day", "context": "zły dzień"},
+            {"date": "2026-05-01", "precision": "day", "context": "numer (niepewne)"},
+        ],
+        amounts=[{"value": 5.0, "currency": "PLN", "context": "opłata (pominięto okres)"}],
+    )
+    run = await analyze_document(ONE_PAGE, "a.pdf", FakeProvider([reply]), SETTINGS)
+    result = run.result
+    assert result.document.date is None
+    assert result.document.subtype == "cv"
+    assert [(d.date, d.precision, d.context) for d in result.dates] == [
+        ("2026-03", "month", "marzec 2026"),
+        ("2026-05-01", "day", "numer"),
+    ]
+    assert result.amounts[0].context == "opłata"
+
+
+async def test_invalid_subtype_becomes_null() -> None:
+    run = await analyze_document(
+        ONE_PAGE, "a.pdf", FakeProvider([model_json(subtype="x" * 40)]), SETTINGS
+    )
+    assert run.result.document.subtype is None
+
+
+async def test_ungrounded_items_are_dropped_with_one_warning() -> None:
+    reply = model_json(
+        entities={"organizations": ["Firma sp. z o.o.", "Zmyślona S.A."], "people": []},
+        amounts=[
+            {"value": 100.0, "currency": "PLN", "context": "cena"},
+            {"value": 105.0, "currency": "PLN", "context": "suma"},
+        ],
+        dates=[{"date": "2026-03-12", "precision": "day", "context": "zawarcie"}],
+    )
+    run = await analyze_document(ONE_PAGE, "a.pdf", FakeProvider([reply]), SETTINGS, "en")
+    assert [a.value for a in run.result.amounts] == [100.0]
+    assert run.result.entities.organizations == ["Firma sp. z o.o."]
+    assert run.result.warnings == ["Dropped 2 items not found in the document text."]
+
+
+async def test_ungrounded_warning_in_polish_and_document_date() -> None:
+    doc = extracted("Firma sp. z o.o. 100 PLN")
+    run = await analyze_document(doc, "a.pdf", FakeProvider([model_json()]), SETTINGS)
+    assert run.result.document.date is None
+    assert run.result.dates == []
+    assert run.result.warnings == [
+        "Pominięto 2 pozycji, których nie znaleziono w tekście dokumentu."
+    ]

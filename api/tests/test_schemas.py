@@ -3,7 +3,7 @@ import copy
 import pytest
 from pydantic import ValidationError
 
-from app.schemas import AnalysisResult, ChunkOutput, count_sentences
+from app.schemas import AnalysisResult, ChunkOutput, count_sentences, date_precision
 
 VALID = {
     "document": {
@@ -11,6 +11,7 @@ VALID = {
         "pages": 12,
         "language": "pl",
         "type": "umowa",
+        "subtype": None,
         "title": "Umowa ramowa nr 14/2026",
         "date": "2026-03-12",
     },
@@ -21,7 +22,7 @@ VALID = {
         "people": ["Anna Kowalczyk"],
     },
     "amounts": [{"value": 184500.0, "currency": "PLN", "context": "wdrożenie netto"}],
-    "dates": [{"date": "2026-03-12", "context": "data zawarcia"}],
+    "dates": [{"date": "2026-03-12", "precision": "day", "context": "data zawarcia"}],
     "keywords": ["CRM"],
     "suspectedInjection": False,
     "warnings": [],
@@ -49,13 +50,65 @@ def test_currency_symbol_rejected() -> None:
 
 def test_bad_dates_rejected() -> None:
     with pytest.raises(ValidationError):
-        AnalysisResult.model_validate(variant(dates=[{"date": "2026-02-30", "context": "x"}]))
+        AnalysisResult.model_validate(
+            variant(dates=[{"date": "2026-02-30", "precision": "day", "context": "x"}])
+        )
     with pytest.raises(ValidationError):
-        AnalysisResult.model_validate(variant(dates=[{"date": "12.03.2026", "context": "x"}]))
+        AnalysisResult.model_validate(
+            variant(dates=[{"date": "12.03.2026", "precision": "day", "context": "x"}])
+        )
     data = copy.deepcopy(VALID)
     data["document"]["date"] = "2026-13-01"
     with pytest.raises(ValidationError):
         AnalysisResult.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("value", "precision"),
+    [("2024", "year"), ("2024-05", "month"), ("2024-05-17", "day")],
+)
+def test_reduced_precision_dates_are_valid(value: str, precision: str) -> None:
+    item = {"date": value, "precision": precision, "context": "x"}
+    result = AnalysisResult.model_validate(variant(dates=[item]))
+    assert result.dates[0].precision == precision
+    assert date_precision(value) == precision
+
+
+@pytest.mark.parametrize(
+    ("value", "precision"),
+    [
+        ("2024", "day"),
+        ("2024-05", "year"),
+        ("2024-13", "month"),
+        ("24", "year"),
+        ("2024-5", "month"),
+    ],
+)
+def test_inconsistent_or_invalid_date_precision_rejected(value: str, precision: str) -> None:
+    item = {"date": value, "precision": precision, "context": "x"}
+    with pytest.raises(ValidationError):
+        AnalysisResult.model_validate(variant(dates=[item]))
+
+
+def test_document_date_must_be_a_full_day() -> None:
+    for value in ("2026", "2026-03"):
+        data = copy.deepcopy(VALID)
+        data["document"]["date"] = value
+        with pytest.raises(ValidationError):
+            AnalysisResult.model_validate(data)
+
+
+def test_subtype_is_optional_lowercase_and_short() -> None:
+    data = copy.deepcopy(VALID)
+    del data["document"]["subtype"]
+    assert AnalysisResult.model_validate(data).document.subtype is None
+    for good in ("cv", "protokół"):
+        data["document"]["subtype"] = good
+        assert AnalysisResult.model_validate(data).document.subtype == good
+    for bad in ("CV", "", " cv", "x" * 31):
+        data["document"]["subtype"] = bad
+        with pytest.raises(ValidationError):
+            AnalysisResult.model_validate(data)
 
 
 def test_key_points_bounds() -> None:
@@ -92,6 +145,7 @@ def test_chunk_output_allows_single_sentence_summary() -> None:
     chunk = {
         "language": "pl",
         "type": "inne",
+        "subtype": None,
         "title": None,
         "date": None,
         "summary": "Jedno zdanie.",

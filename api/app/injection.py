@@ -41,11 +41,16 @@ def _snippet(text: str, start: int) -> str:
     return " ".join(text[start : min(stop, start + _SNIPPET_MAX)].split())
 
 
+def injection_starts(text: str) -> list[int]:
+    # _fold keeps one character per character, so offsets match the original text
+    folded = _fold(text)
+    return [m.start() for rule in _RULES for m in rule.finditer(folded)]
+
+
 def find_injections(pages: list[PageText]) -> list[InjectionHit]:
     hits: list[InjectionHit] = []
     for page in pages:
-        folded = _fold(page.text)
-        starts = [m.start() for rule in _RULES for m in rule.finditer(folded)]
+        starts = injection_starts(page.text)
         if starts:
             hits.append(InjectionHit(page.number, _snippet(page.text, min(starts))))
     return hits

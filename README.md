@@ -11,7 +11,7 @@ Upload a PDF, get a summary, key points, entities, amounts and dates as validate
 ## Demo
 
 - App: https://pwnaxe.github.io/pdf-insight/
-- API: https://pdf-insight-api.pixelhorizon.dev (health check at `/health`)
+- API: https://pdf-insight-api.pixelhorizon.dev/health
 
 ![screenshot](docs/screenshot.png)
 
@@ -103,6 +103,19 @@ Defined twice, kept in sync by hand:
 Besides the fields from the brief there are two added ones: `suspectedInjection` (bool) and
 `warnings` (list of messages for the user: injection, pages without text, truncation).
 JSON keys are camelCase.
+
+- `document.subtype`: optional short lowercase label inside the fixed `type` list (for example
+  `cv` for a resume, whose `type` is `inne`), or `null`.
+- `dates[].precision`: `year`, `month` or `day`. `dates[].date` is ISO 8601 and may be `YYYY`,
+  `YYYY-MM` or `YYYY-MM-DD`. `document.date` is a full day or `null`. See
+  [ADR 0006](docs/decisions/0006-date-precision.md).
+- `amounts[].context` and `dates[].context` are at most 80 characters. The server cuts them at a
+  word boundary and removes meta remarks from the model ("pominięto", "not a date"...); a date
+  whose context says it is not a date is dropped.
+- Output language: every text written by the model (summary, key points, keywords, contexts,
+  descriptive title) follows the UI language sent as `lang`, whatever the language of the
+  document. `document.language` is still the detected language of the document. Switching the UI
+  language does not re-run an analysis; the next analysis uses the current one.
 
 ## Language
 

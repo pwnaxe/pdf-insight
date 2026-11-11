@@ -54,4 +54,4 @@ def test_encrypted(encrypted_pdf_bytes: bytes) -> None:
 def test_invalid(data: bytes) -> None:
     with pytest.raises(PdfError) as info:
         extract_pdf(data, max_pages=100, max_chars=400_000)
-    assert info.value.code == "PDF_INVALID"
+    assert info.value.code == "INVALID_PDF"
