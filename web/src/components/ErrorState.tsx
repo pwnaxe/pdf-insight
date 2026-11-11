@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n';
 import { primaryButton, secondaryButton } from './ui';
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export function ErrorState({ message, canRetry, onRetry, onReset }: Props) {
+  const { t } = useI18n();
   return (
     <div
       data-testid="error"
@@ -18,11 +20,11 @@ export function ErrorState({ message, canRetry, onRetry, onReset }: Props) {
       <div className="mt-4 flex flex-wrap gap-2">
         {canRetry && (
           <button type="button" className={primaryButton} onClick={onRetry}>
-            Spróbuj ponownie
+            {t.tryAgain}
           </button>
         )}
         <button type="button" className={secondaryButton} onClick={onReset}>
-          Wybierz inny plik
+          {t.chooseAnother}
         </button>
       </div>
     </div>

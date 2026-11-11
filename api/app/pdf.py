@@ -8,6 +8,7 @@ from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
 from app.errors import ApiError
+from app.messages import DEFAULT_LANG, Lang, error_message
 
 MIN_TEXT_CHARS = 10
 
@@ -42,30 +43,28 @@ def _has_text(text: str) -> bool:
     return len(re.sub(r"\s", "", text)) >= MIN_TEXT_CHARS
 
 
-def _open(data: bytes) -> PdfReader:
+def _open(data: bytes, lang: Lang) -> PdfReader:
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
-            raise PdfError(
-                "PDF_ENCRYPTED", "Ten PDF jest zaszyfrowany i nie można go odczytać.", 422
-            )
+            raise PdfError("PDF_ENCRYPTED", error_message("PDF_ENCRYPTED", lang), 422)
         reader.pages[0:0]
     except PdfError:
         raise
     except (PyPdfError, ValueError, KeyError, TypeError, OSError, RecursionError) as exc:
-        raise PdfError(
-            "PDF_INVALID", "Nie udało się odczytać pliku PDF. Plik jest uszkodzony.", 422
-        ) from exc
+        raise PdfError("PDF_INVALID", error_message("PDF_INVALID", lang), 422) from exc
     return reader
 
 
-def extract_pdf(data: bytes, max_pages: int, max_chars: int) -> ExtractedPdf:
-    reader = _open(data)
+def extract_pdf(
+    data: bytes, max_pages: int, max_chars: int, lang: Lang = DEFAULT_LANG
+) -> ExtractedPdf:
+    reader = _open(data, lang)
     page_count = len(reader.pages)
     if page_count > max_pages:
         raise PdfError(
             "TOO_MANY_PAGES",
-            f"Dokument ma zbyt wiele stron (limit: {max_pages}).",
+            error_message("TOO_MANY_PAGES", lang, max_pages=max_pages),
             413,
         )
 
@@ -98,14 +97,12 @@ def extract_pdf(data: bytes, max_pages: int, max_chars: int) -> ExtractedPdf:
         OSError,
         RecursionError,
     ) as exc:
-        raise PdfError(
-            "PDF_INVALID", "Nie udało się odczytać pliku PDF. Plik jest uszkodzony.", 422
-        ) from exc
+        raise PdfError("PDF_INVALID", error_message("PDF_INVALID", lang), 422) from exc
 
     if not pages and not truncated:
         raise PdfError(
             "NO_TEXT",
-            "Ten PDF nie ma warstwy tekstowej (prawdopodobnie skan). OCR nie jest obsługiwany.",
+            error_message("NO_TEXT", lang),
             422,
         )
     return ExtractedPdf(page_count, pages, without_text, truncated)
