@@ -1,0 +1,6 @@
+# Copy to docker-compose.override.yml on the server (it is git-ignored).
+# The env file is root-only and lives outside the repo, so the repo's .env is not used.
+services:
+  pdf-insight-api:
+    env_file: !override
+      - /etc/pdf-insight/api.env

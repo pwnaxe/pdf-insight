@@ -1,0 +1,12 @@
+services:
+  pdf-insight-api:
+    build: .
+    container_name: pdf-insight-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8000"
+    env_file: .env
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 512m
