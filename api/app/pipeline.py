@@ -13,7 +13,7 @@ from app.grounding import ground_fields
 from app.injection import InjectionHit, find_injections
 from app.llm import LLMError, LLMProvider, LLMTimeout
 from app.merge import merge_chunk_outputs
-from app.messages import DEFAULT_LANG, Lang, error_message, warning_message
+from app.messages import Lang, error_message, message_lang, warning_message
 from app.normalize import (
     normalise_amounts,
     normalise_dates,
@@ -89,18 +89,17 @@ async def _call[T: BaseModel](
     model: type[T],
     user: str,
     check: Check | None = None,
-    lang: Lang = DEFAULT_LANG,
 ) -> T:
-    system = system_prompt(schema_name, lang)
+    system = system_prompt(schema_name)
     schema = model.model_json_schema()
     prompt = user
     for attempt in range(2):
         try:
             raw = await provider.complete_json(system, prompt, schema_name, schema)
         except (LLMTimeout, TimeoutError) as exc:
-            raise ApiError("AI_TIMEOUT", error_message("AI_TIMEOUT", lang), 504) from exc
+            raise ApiError("AI_TIMEOUT", error_message("AI_TIMEOUT"), 504) from exc
         except LLMError as exc:
-            raise ApiError("AI_ERROR", error_message("AI_ERROR", lang), 502) from exc
+            raise ApiError("AI_ERROR", error_message("AI_ERROR"), 502) from exc
         try:
             output = model.model_validate(json.loads(raw))
             problem = check(output) if check else None
@@ -110,21 +109,19 @@ async def _call[T: BaseModel](
             if problem is None:
                 return output
         if attempt == 1:
-            raise ApiError("AI_INVALID_OUTPUT", error_message("AI_INVALID_OUTPUT", lang), 502)
+            raise ApiError("AI_INVALID_OUTPUT", error_message("AI_INVALID_OUTPUT"), 502)
         prompt = retry_user_prompt(user, problem)
     raise AssertionError("unreachable")
 
 
 async def _extract_chunks(
-    provider: LLMProvider, chunks: list[list[PageText]], check: Check, lang: Lang
+    provider: LLMProvider, chunks: list[list[PageText]], check: Check
 ) -> list[ChunkOutput]:
     semaphore = asyncio.Semaphore(CHUNK_CONCURRENCY)
 
     async def run(pages: list[PageText]) -> ChunkOutput:
         async with semaphore:
-            return await _call(
-                provider, "chunk", ChunkOutput, document_user_prompt(pages), check, lang
-            )
+            return await _call(provider, "chunk", ChunkOutput, document_user_prompt(pages), check)
 
     return list(await asyncio.gather(*(run(pages) for pages in chunks)))
 
@@ -165,7 +162,6 @@ async def analyze_document(
     file_name: str,
     provider: LLMProvider,
     settings: Settings,
-    lang: Lang = DEFAULT_LANG,
 ) -> AnalysisRun:
     plan = chunk_pages(extracted.pages, settings.chunk_chars, settings.max_chunks)
     hits = find_injections(extracted.pages)
@@ -173,7 +169,7 @@ async def analyze_document(
 
     if len(plan.chunks) == 1:
         out = await _call(
-            provider, "analysis", ModelOutput, document_user_prompt(plan.chunks[0]), check, lang
+            provider, "analysis", ModelOutput, document_user_prompt(plan.chunks[0]), check
         )
         fields = dict(out)
         fields.pop("injection_detected")
@@ -184,19 +180,12 @@ async def analyze_document(
         if sum(len(page.text) for page in planned) <= settings.direct_summary_chars:
             # summary over the full text runs alongside the chunk calls to save a round trip
             outputs, final = await asyncio.gather(
-                _extract_chunks(provider, plan.chunks, check, lang),
-                _call(
-                    provider,
-                    "summary",
-                    FinalOutput,
-                    document_user_prompt(planned),
-                    check,
-                    lang,
-                ),
+                _extract_chunks(provider, plan.chunks, check),
+                _call(provider, "summary", FinalOutput, document_user_prompt(planned), check),
             )
             merged = merge_chunk_outputs(outputs)
         else:
-            outputs = await _extract_chunks(provider, plan.chunks, check, lang)
+            outputs = await _extract_chunks(provider, plan.chunks, check)
             merged = merge_chunk_outputs(outputs)
             final = await _call(
                 provider,
@@ -204,7 +193,6 @@ async def analyze_document(
                 FinalOutput,
                 final_user_prompt(merged.summaries, merged.key_points),
                 check,
-                lang,
             )
         fields = {
             "language": merged.language,
@@ -222,6 +210,7 @@ async def analyze_document(
         model_flag = merged.injection_detected
 
     entities: Entities = fields["entities"]
+    lang = message_lang(fields["language"])
     grounded = ground_fields(
         extracted.pages,
         normalise_amounts(fields["amounts"], lang),
@@ -262,5 +251,5 @@ async def analyze_document(
             warnings=warnings,
         )
     except ValidationError as exc:
-        raise ApiError("AI_INVALID_OUTPUT", error_message("AI_INVALID_OUTPUT", lang), 502) from exc
+        raise ApiError("AI_INVALID_OUTPUT", error_message("AI_INVALID_OUTPUT"), 502) from exc
     return AnalysisRun(result, len(plan.chunks))

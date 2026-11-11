@@ -112,18 +112,20 @@ JSON keys are camelCase.
 - `amounts[].context` and `dates[].context` are at most 80 characters. The server cuts them at a
   word boundary and removes meta remarks from the model ("pominięto", "not a date"...); a date
   whose context says it is not a date is dropped.
-- Output language: every text written by the model (summary, key points, keywords, contexts,
-  descriptive title) follows the UI language sent as `lang`, whatever the language of the
-  document. `document.language` is still the detected language of the document. Switching the UI
-  language does not re-run an analysis; the next analysis uses the current one.
+- Output language: the summary, key points, keywords, title, contexts and all other extracted
+  values are written in the language of the document, as the brief requires. The UI language
+  has no effect on the analysis. See [ADR 0008](docs/decisions/0008-output-language-follows-document.md).
 
 ## Language
 
 The UI is Polish by default with an English toggle (PL / EN in the header). The choice is kept in
-`localStorage` (`pdf-insight:lang`) and the dictionaries live in `web/src/lib/i18n.ts`. The web app
-sends the current language as the optional multipart field `lang` (`pl` or `en`; anything else means
-`pl`), and the API words its warnings and error messages in that language
-([api/app/messages.py](api/app/messages.py)). Errors returned by nginx itself stay in English.
+`localStorage` (`pdf-insight:lang`) and the dictionaries live in `web/src/lib/i18n.ts`. The toggle
+changes only the UI labels and the web app's own error texts: it is not sent to the API, it never
+re-runs an analysis and it does not affect the result. The API has no `lang` parameter (a `lang`
+field in the request is ignored). Warnings in the result follow the detected document language
+(Polish for `pl`, English otherwise), and error responses are always English
+([api/app/messages.py](api/app/messages.py)); the web app shows its own localized text for every
+known error code. Errors returned by nginx itself stay in English.
 
 ## Running locally
 

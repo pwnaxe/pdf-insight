@@ -1,6 +1,5 @@
 import re
 
-from app.messages import Lang
 from app.pdf import PageText
 
 _DOCUMENT_TAG = re.compile(r"</?\s*document\s*>", re.IGNORECASE)
@@ -53,15 +52,11 @@ drops those that do not. Never fill in a missing day or month.
 - keywords: at most 10.
 """
 
-_LANGUAGES = {"pl": "Polish", "en": "English"}
-
 _OUTPUT_LANGUAGE = """
-Output language: {code} ({name}).
-Write every text you produce in {name}, whatever the language of the document: summary, \
-keyPoints, keywords, the context of every amount and date, and document.title when it is a \
-descriptive heading. Do not translate names of organisations and people, quoted official \
-titles, or identifiers and numbers. document.language still states the language of the \
-document itself.
+Output language: write the summary, keyPoints, keywords, document.title and every context or \
+description field (of amounts and dates) in the language of the document, whatever language \
+this prompt is written in. Do not translate names of organisations and people, quoted \
+official titles, or identifiers and numbers. JSON keys stay in English.
 """
 
 _FULL = """
@@ -105,9 +100,8 @@ _SYSTEM = {
 }
 
 
-def system_prompt(schema_name: str, lang: Lang) -> str:
-    language = _OUTPUT_LANGUAGE.format(code=lang, name=_LANGUAGES[lang])
-    return _BASE + _SYSTEM[schema_name] + language
+def system_prompt(schema_name: str) -> str:
+    return _BASE + _SYSTEM[schema_name] + _OUTPUT_LANGUAGE
 
 
 def _neutralise(text: str) -> str:
