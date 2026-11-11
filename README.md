@@ -40,8 +40,8 @@ not fit a Worker well, and I already had a VPS.
 **Model.** `gpt-6-luna` with structured outputs (`json_schema`, `strict: true`). The reply is
 validated with Pydantic on the server and with Zod on the client. Reasoning effort and
 temperature are optional env vars. Production runs with `LLM_REASONING_EFFORT=none`: on the test
-contract it was about 2x faster than `low` (12-14 s vs 23 s) with the same facts extracted. If the answer fails validation, the call is retried once with
-the validation error appended to the prompt. A second failure returns `AI_INVALID_OUTPUT`.
+contract that's 12-14 s vs 23 s with `low`, same facts extracted. If the answer fails validation,
+the call is retried once with the validation error appended to the prompt. A second failure returns `AI_INVALID_OUTPUT`.
 
 **Chunking.** Text is split into chunks of 12k chars by whole pages (a huge page is split by
 paragraphs). Chunk extraction and the summary of the full text run in parallel. The chunk
