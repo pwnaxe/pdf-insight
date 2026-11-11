@@ -11,7 +11,7 @@ Upload a PDF, get a summary, key points, entities, amounts and dates as validate
 ## Demo
 
 - App: https://pwnaxe.github.io/pdf-insight/
-- API: https://pdf-insight-api.pixelhorizon.dev (health check at `/health`)
+- API: https://pdf-insight-api.pixelhorizon.dev/health
 
 ![screenshot](docs/screenshot.png)
 
