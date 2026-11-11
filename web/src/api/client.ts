@@ -25,7 +25,7 @@ const STATUS_MESSAGES: Record<number, string> = {
   429: 'Zbyt wiele żądań. Spróbuj ponownie za kilka minut.',
 };
 
-export class ApiError extends Error {}
+class ApiError extends Error {}
 
 function messageFor(body: unknown, status: number): string {
   if (typeof body === 'object' && body !== null && 'error' in body) {
