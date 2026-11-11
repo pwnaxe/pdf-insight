@@ -4,7 +4,7 @@ import time
 import tomllib
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi import FastAPI, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -15,7 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import Settings, get_settings
 from app.errors import ApiError
 from app.llm import LLMProvider, build_provider
-from app.messages import DEFAULT_LANG, Lang, error_message, parse_lang
+from app.messages import error_message
 from app.pdf import extract_pdf
 from app.pipeline import analyze_document
 from app.ratelimit import SlidingWindowLimiter
@@ -105,8 +105,7 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, __: RequestValidationError) -> JSONResponse:
-        # the form is not parsed when validation fails, so the language is unknown here
-        return _error_response(422, "VALIDATION_ERROR", error_message("VALIDATION_ERROR", "en"))
+        return _error_response(422, "VALIDATION_ERROR", error_message("VALIDATION_ERROR"))
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -114,12 +113,12 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
         headers = (
             {"Allow": exc.headers["Allow"]} if exc.headers and "Allow" in exc.headers else None
         )
-        return _error_response(exc.status_code, code, error_message(code, "en"), headers)
+        return _error_response(exc.status_code, code, error_message(code), headers)
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         logger.error("unhandled error: %s", type(exc).__name__)
-        response = _error_response(500, "INTERNAL_ERROR", error_message("INTERNAL_ERROR", "en"))
+        response = _error_response(500, "INTERNAL_ERROR", error_message("INTERNAL_ERROR"))
         # this response is built outside the user middleware stack, so add the headers here
         apply_security_headers(response.headers, request.url.path)
         return response
@@ -144,23 +143,20 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
         return {"status": "ok"}
 
     @app.post("/api/analyze", response_model=AnalysisResult)
-    async def analyze(
-        request: Request, file: UploadFile, lang: str = Form(DEFAULT_LANG)
-    ) -> AnalysisResult:
-        language = parse_lang(lang)
+    async def analyze(request: Request, file: UploadFile) -> AnalysisResult:
         started = time.perf_counter()
         status = 200
         pages = chunks = 0
         try:
             origin = request.headers.get("origin")
             if origin is not None and origin not in settings.origins:
-                raise ApiError("FORBIDDEN_ORIGIN", error_message("FORBIDDEN_ORIGIN", language), 403)
+                raise ApiError("FORBIDDEN_ORIGIN", error_message("FORBIDDEN_ORIGIN"), 403)
 
             retry_after = limiter.check(_client_ip(request, settings))
             if retry_after is not None:
                 raise ApiError(
                     "RATE_LIMITED",
-                    error_message("RATE_LIMITED", language),
+                    error_message("RATE_LIMITED"),
                     429,
                     {"Retry-After": str(math.ceil(retry_after))},
                 )
@@ -168,21 +164,19 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
             limit = settings.max_file_bytes
             declared = request.headers.get("content-length")
             if declared and declared.isdigit() and int(declared) > limit + READ_CHUNK:
-                raise ApiError("FILE_TOO_LARGE", _too_large(settings, language), 413)
-            data = await _read_capped(file, limit, _too_large(settings, language))
+                raise ApiError("FILE_TOO_LARGE", _too_large(settings), 413)
+            data = await _read_capped(file, limit, _too_large(settings))
 
             if not data.startswith(b"%PDF-") or not _is_pdf_upload(file):
                 raise ApiError(
-                    "UNSUPPORTED_MEDIA_TYPE", error_message("UNSUPPORTED_MEDIA_TYPE", language), 415
+                    "UNSUPPORTED_MEDIA_TYPE", error_message("UNSUPPORTED_MEDIA_TYPE"), 415
                 )
 
             extracted = await run_in_threadpool(
-                extract_pdf, data, settings.max_pages, settings.max_text_chars, language
+                extract_pdf, data, settings.max_pages, settings.max_text_chars
             )
             pages = extracted.page_count
-            run = await analyze_document(
-                extracted, file.filename or "", provider, settings, language
-            )
+            run = await analyze_document(extracted, file.filename or "", provider, settings)
             chunks = run.chunks
             return run.result
         except ApiError as exc:
@@ -204,8 +198,8 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
     return app
 
 
-def _too_large(settings: Settings, lang: Lang) -> str:
-    return error_message("FILE_TOO_LARGE", lang, max_mb=settings.max_file_mb)
+def _too_large(settings: Settings) -> str:
+    return error_message("FILE_TOO_LARGE", max_mb=settings.max_file_mb)
 
 
 app = create_app()

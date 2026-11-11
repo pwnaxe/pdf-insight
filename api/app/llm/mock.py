@@ -30,7 +30,6 @@ _AMOUNT = re.compile(
     re.IGNORECASE,
 )
 _NUMERIC_DATE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
-_OUTPUT_LANG = re.compile(r"^Output language: (pl|en)\b", re.MULTILINE)
 _MONTH_NOMINATIVE = {
     "styczeń": 1,
     "luty": 2,
@@ -259,17 +258,12 @@ def _summary(
     return " ".join(parts)
 
 
-def _output_lang(system: str) -> str:
-    match = _OUTPUT_LANG.search(system)
-    return match.group(1) if match else "pl"
-
-
-def _extract(user: str, out_lang: str) -> dict:
-    texts = _TEXTS[out_lang]
+def _extract(user: str) -> dict:
     pages = _pages(user)
     text = "\n\n".join(p.text for p in pages)
     first = pages[0].text if pages else ""
     kind, lang, title = _type(first), _language(text), _title(first)
+    texts = _TEXTS[lang]
     subtype = _subtype(first) if kind == "inne" else None
     orgs = _unique([f"{m.group(1).strip()} {m.group(2)}" for m in _ORGANIZATION.finditer(text)])
     people = _unique([m.group(1) for m in _PERSON.finditer(text)])
@@ -294,7 +288,7 @@ def _extract(user: str, out_lang: str) -> dict:
         "subtype": subtype,
         "title": title,
         "date": next((d.date for d in dates if d.precision == "day"), None),
-        "summary": _summary(kind, title, orgs, amounts, len(dates), out_lang),
+        "summary": _summary(kind, title, orgs, amounts, len(dates), lang),
         "key_points": points,
         "entities": Entities(organizations=orgs, people=people),
         "amounts": amounts,
@@ -305,10 +299,10 @@ def _extract(user: str, out_lang: str) -> dict:
     }
 
 
-def _final(user: str, out_lang: str) -> FinalOutput:
-    texts = _TEXTS[out_lang]
+def _final(user: str) -> FinalOutput:
     body = _DOCUMENT.search(user)
     text = body.group(1) if body else user
+    texts = _TEXTS[_language(text)]
     fragments = re.findall(r"\[fragment \d+\]\n(.*?)(?=\n\n\[)", text, re.DOTALL)
     points = [
         line[2:]
@@ -328,10 +322,9 @@ class MockProvider:
     async def complete_json(
         self, system: str, user: str, schema_name: str, json_schema: dict
     ) -> str:
-        out_lang = _output_lang(system)
         if schema_name == "final":
-            return _final(user, out_lang).model_dump_json(by_alias=True)
-        data = _extract(user, out_lang)
+            return _final(user).model_dump_json(by_alias=True)
+        data = _extract(user)
         if schema_name == "summary":
             return FinalOutput(
                 summary=data["summary"], key_points=data["key_points"][:7]

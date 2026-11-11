@@ -33,20 +33,15 @@ test('falls back to the server message for an unknown code', async () => {
   await expect(analyzePdf(file, 'pl')).rejects.toThrow('Niestandardowy błąd.');
 });
 
-test('sends the language as a form field', async () => {
-  stubFetch(Response.json(validResult));
-  await analyzePdf(file, 'en');
-  const init = vi.mocked(fetch).mock.calls[0]?.[1];
-  expect((init?.body as FormData).get('lang')).toBe('en');
-});
-
 test.each(['pl', 'en'] as const)(
-  'sends the current language (%s) with every request',
+  'sends only the file, never a language field (UI %s)',
   async (lang) => {
     stubFetch(Response.json(validResult));
     await analyzePdf(file, lang);
     const init = vi.mocked(fetch).mock.calls[0]?.[1];
-    expect((init?.body as FormData).get('lang')).toBe(lang);
+    const body = init?.body as FormData;
+    expect([...body.keys()]).toEqual(['file']);
+    expect(body.has('lang')).toBe(false);
   },
 );
 

@@ -11,7 +11,7 @@ function messageFor(t: Messages, body: unknown, status: number): string {
     if (typeof error?.code === 'string' && Object.hasOwn(t.errors, error.code)) {
       return t.errors[error.code as keyof Messages['errors']];
     }
-    // the API words its own messages in the requested language
+    // unknown codes only: the API messages are English, known codes use the UI texts above
     if (typeof error?.message === 'string' && error.message) return error.message;
   }
   if (status === 413) return t.errors.FILE_TOO_LARGE;
@@ -37,7 +37,6 @@ export async function analyzePdf(
   try {
     const body = new FormData();
     body.append('file', file);
-    body.append('lang', lang);
     let response: Response;
     try {
       response = await fetch(`${import.meta.env.VITE_API_URL}/api/analyze`, {
