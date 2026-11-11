@@ -2,8 +2,8 @@
 
 ## What this is
 PDF Insight: upload a PDF (contract, invoice, report) and get a structured result: title, date,
-summary, key points, and extracted amounts. The text is extracted on the server and sent to an LLM
-in chunks, then merged into one JSON answer that the web app validates and shows.
+summary, key points, and extracted amounts. The server extracts the text and sends it to an LLM
+in chunks, merges the answers into one JSON, and the web app validates and shows it.
 
 ## Architecture
 - `web/`: React + Vite + TypeScript + Tailwind + Zod. Static site, deployed to GitHub Pages

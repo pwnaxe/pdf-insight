@@ -47,7 +47,7 @@ nginx (`deploy/nginx/pdf-insight-api.conf`) terminates TLS, applies `limit_req` 
 
 ## Pipeline
 
-`analyze_document` in `pipeline.py` picks one of three paths from the chunk plan.
+`analyze_document` in `pipeline.py` picks one of three paths based on the chunks.
 
 ```mermaid
 flowchart TD
@@ -68,8 +68,8 @@ flowchart TD
 - Several chunks, text within `DIRECT_SUMMARY_CHARS`: chunk calls extract entities, amounts and
   dates, while a separate `summary` call reads the whole text. They run together.
 - Several chunks, text over `DIRECT_SUMMARY_CHARS`: chunk calls first, then a `final` call that
-  writes the summary from the chunk summaries and key points. With the default settings
-  (12 chunks of 12k chars at most) this path is not reached; it applies if `MAX_CHUNKS` or
+  writes the summary from the chunk summaries and key points. With the defaults
+  (12 chunks of 12k chars max) this path never runs. It only applies if `MAX_CHUNKS` or
   `CHUNK_CHARS` are raised.
 
 Every model call goes through `_call`, which validates the reply and retries once. See
