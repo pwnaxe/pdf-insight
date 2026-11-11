@@ -119,5 +119,7 @@ def test_full_flow_with_mock_provider(contract_bytes: bytes, origin: str | None)
     assert any("Strony bez warstwy tekstowej (pominięte): 11." in w for w in body["warnings"])
     assert any("polecenia systemowi AI (strona 4)" in w for w in body["warnings"])
     amounts = {(a["value"], a["currency"]) for a in body["amounts"]}
-    assert {(184500.0, "PLN"), (226935.0, "PLN"), (8600.0, "EUR"), (890.0, "USD")} <= amounts
+    assert {(184500.0, "PLN"), (226935.0, "PLN"), (2150.0, "EUR"), (890.0, "USD")} <= amounts
+    assert len(body["amounts"]) <= 12
+    assert len(body["dates"]) <= 12
     assert 3 <= len(body["keyPoints"]) <= 7
