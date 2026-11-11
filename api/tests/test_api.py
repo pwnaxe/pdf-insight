@@ -1,10 +1,25 @@
+import tomllib
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.llm import LLMError, LLMTimeout
 from app.main import create_app
 
 ORIGIN = "https://pwnaxe.github.io"
+PYPROJECT = Path(__file__).parents[1] / "pyproject.toml"
+
+
+class FailingProvider:
+    name = "failing"
+
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+
+    async def complete_json(self, *args: object, **kwargs: object) -> str:
+        raise self.exc
 
 
 def make_client(**overrides: object) -> TestClient:
@@ -34,7 +49,7 @@ def test_health() -> None:
 def test_not_pdf() -> None:
     response = post(make_client(), b"hello world", "a.txt", "text/plain")
     assert response.status_code == 415
-    assert error_code(response) == "NOT_PDF"
+    assert error_code(response) == "UNSUPPORTED_MEDIA_TYPE"
 
 
 def test_wrong_magic_with_pdf_name() -> None:
@@ -178,3 +193,73 @@ def test_full_flow_with_mock_provider(
     assert len(body["amounts"]) <= 20
     assert len(body["dates"]) <= 20
     assert 3 <= len(body["keyPoints"]) <= 7
+
+
+def test_root() -> None:
+    body = make_client().get("/").json()
+    assert body["name"] == "pdf-insight-api"
+    assert (
+        body["version"]
+        == tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]["version"]
+    )
+    assert body["endpoints"] == ["GET /health", "POST /api/analyze"]
+    assert body["repo"] == "https://github.com/pwnaxe/pdf-insight"
+
+
+def test_unknown_path_is_not_found() -> None:
+    response = make_client().get("/nope")
+    assert response.status_code == 404
+    assert response.json() == {"error": {"code": "NOT_FOUND", "message": "Not found."}}
+
+
+def test_wrong_method_has_allow_header() -> None:
+    response = make_client().get("/api/analyze")
+    assert response.status_code == 405
+    assert error_code(response) == "METHOD_NOT_ALLOWED"
+    assert "POST" in response.headers["allow"]
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_docs_disabled_in_prod(path: str) -> None:
+    response = make_client(env="prod").get(path)
+    assert response.status_code == 404
+    assert error_code(response) == "NOT_FOUND"
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_docs_enabled_in_dev(path: str) -> None:
+    assert make_client(env="dev").get(path).status_code == 200
+
+
+def test_rate_limited_has_retry_after(contract_bytes: bytes) -> None:
+    client = make_client(rate_limit_per_10min=1)
+    assert post(client, contract_bytes).status_code == 200
+    response = post(client, contract_bytes)
+    assert response.status_code == 429
+    assert error_code(response) == "RATE_LIMITED"
+    assert int(response.headers["retry-after"]) > 0
+
+
+def test_corrupt_pdf_is_invalid() -> None:
+    response = post(make_client(), b"%PDF-1.4 garbage")
+    assert response.status_code == 415
+    assert error_code(response) == "INVALID_PDF"
+
+
+def test_ai_failures_map_to_upstream_codes(contract_bytes: bytes) -> None:
+    for exc, status, code in [(LLMTimeout(), 504, "AI_TIMEOUT"), (LLMError(), 502, "AI_ERROR")]:
+        client = TestClient(create_app(Settings(llm_provider="mock"), FailingProvider(exc)))
+        response = post(client, contract_bytes)
+        assert (response.status_code, error_code(response)) == (status, code)
+
+
+def test_internal_error_hides_details(contract_bytes: bytes) -> None:
+    client = TestClient(
+        create_app(Settings(llm_provider="mock"), FailingProvider(ValueError("secret detail"))),
+        raise_server_exceptions=False,
+    )
+    response = post(client, contract_bytes)
+    assert response.status_code == 500
+    assert error_code(response) == "INTERNAL_ERROR"
+    assert "secret detail" not in response.text
+    assert "Traceback" not in response.text
