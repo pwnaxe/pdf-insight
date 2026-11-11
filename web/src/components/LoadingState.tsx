@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { card } from './ui';
 
 const UPLOAD_STEP_SECONDS = 2;
 
@@ -13,10 +14,13 @@ export function LoadingState() {
   const step = seconds < UPLOAD_STEP_SECONDS ? 'Wysyłam plik…' : 'Analizuję dokument…';
 
   return (
-    <div className="loading" role="status" aria-live="polite">
-      <span className="spinner" aria-hidden="true" />
+    <div className={`${card} flex items-center gap-3`} role="status" aria-live="polite">
+      <span
+        className="size-5 shrink-0 rounded-full border-[3px] border-slate-200 border-t-indigo-600 motion-safe:animate-spin"
+        aria-hidden="true"
+      />
       <span>
-        {step} <span className="muted">({seconds} s)</span>
+        {step} <span className="text-sm text-slate-600">({seconds} s)</span>
       </span>
     </div>
   );

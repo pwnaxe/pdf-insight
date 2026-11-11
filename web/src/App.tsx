@@ -89,31 +89,37 @@ export default function App() {
   };
 
   return (
-    <main>
-      <h1>PDF Insight</h1>
-      <p className="lead">Wgraj dokument PDF, aby otrzymać jego streszczenie.</p>
-      <AiNotice />
+    <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">PDF Insight</h1>
+        <p className="mt-1 text-slate-600">
+          Wgraj dokument PDF, aby otrzymać jego streszczenie, kwoty i daty.
+        </p>
+      </header>
+      <main className="flex flex-col gap-6">
+        <AiNotice />
 
-      <Dropzone disabled={state.status === 'uploading'} onFile={onFile} />
+        <Dropzone disabled={state.status === 'uploading'} onFile={onFile} />
 
-      {state.status === 'idle' && <EmptyState />}
-      {state.status === 'uploading' && <LoadingState />}
-      {state.status === 'error' && (
-        <ErrorState
-          message={state.message}
-          canRetry={state.file !== null}
-          onRetry={() => state.file && analyze(state.file)}
-          onReset={reset}
+        {state.status === 'idle' && <EmptyState />}
+        {state.status === 'uploading' && <LoadingState />}
+        {state.status === 'error' && (
+          <ErrorState
+            message={state.message}
+            canRetry={state.file !== null}
+            onRetry={() => state.file && analyze(state.file)}
+            onReset={reset}
+          />
+        )}
+        {state.status === 'done' && <ResultView result={state.result} />}
+
+        <HistoryPanel
+          entries={history}
+          onOpen={openEntry}
+          onDelete={(id) => setHistory(removeFromHistory(id))}
+          onClear={() => setHistory(clearHistory())}
         />
-      )}
-      {state.status === 'done' && <ResultView result={state.result} />}
-
-      <HistoryPanel
-        entries={history}
-        onOpen={openEntry}
-        onDelete={(id) => setHistory(removeFromHistory(id))}
-        onClear={() => setHistory(clearHistory())}
-      />
-    </main>
+      </main>
+    </div>
   );
 }
