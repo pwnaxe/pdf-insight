@@ -69,3 +69,21 @@ ran tests and an e2e check between stages and made the commits myself.
   8 600 EUR yearly, 890 USD monthly, injection flagged and ignored, page 11 reported as a scan,
   under 30 s.
 - 360 px layout without horizontal scroll, JSON download, history after reload (headless e2e).
+
+## Last round: hardening, redesign, language
+
+- **Grounding.** Every amount, date, person and company must appear in the PDF text, otherwise
+  it is dropped and one warning says how many. Dates keep their precision (year, month or day),
+  a missing day is never invented.
+- **CV as a subtype.** Instead of extending the `type` enum from the brief, `document.subtype`
+  holds a short label like `cv` (type stays `inne`).
+- **Security audit.** Pinned actions, security headers and a CSP, stable error codes, non-root
+  container, `SECURITY.md`, and `npm audit fix` done through a minimatch override.
+- **UI redesign.** Own palette and self-hosted fonts, plus a PL/EN toggle for the UI.
+- **Language fix.** I first had the output follow the UI language. The brief says the
+  values must be in the document's language, so I switched it back: no `lang` param in
+  the API, the toggle only changes labels (ADR 0008).
+- **What went wrong.** The first CSP build inlined small font files as `data:` URIs and
+  `font-src 'self'` blocked them (fixed with `assetsInlineLimit: 0`). A test sentinel named
+  `SECRET` triggered gitleaks, so it was renamed. The model also wrote "not a date" remarks
+  inside contexts, which are now filtered in post-processing.
