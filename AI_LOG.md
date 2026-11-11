@@ -1,70 +1,71 @@
 # AI log
 
-## Tools
+## Tool
 
-- Claude Code CLI (`claude`, model Sonnet), headless, wrote the code. I ran it in stages from a
-  short spec, reviewed every diff, ran tests and e2e between stages and committed myself.
-- An AI assistant (Grok Bot) that drove the Claude Code runs, did the server setup (Docker,
-  nginx, certbot) and the manual tests against the real API.
-- OpenAI `gpt-6-luna` is the model inside the app.
+Claude Code CLI, model Sonnet, run headless in stages from a short spec. I reviewed every diff,
+ran tests and an e2e check between stages and made the commits myself.
+
+## Decisions I made up front
+
+- **Python backend as a proxy.** GitHub Pages is static and Vite bakes every `VITE_*` var into
+  the bundle, so a key in the frontend env would be public. FastAPI on my own VPS holds the key.
+- **OpenAI, cheap and fast.** `gpt-6-luna` with `reasoning_effort=none`, structured output
+  (`json_schema`, strict), Pydantic on the server and Zod in the browser.
+- **Limits.** 10 MB, 100 pages, 400k chars, rate limit per IP in the app and in nginx, CORS only
+  for the Pages origin plus 403 for a foreign `Origin`.
+- **PDF text is data.** Document goes inside `<document>` tags, the model reports
+  `injectionDetected`, a regex check runs next to it, the UI shows a badge.
+- **Tailwind** for the UI instead of hand-written CSS.
+- **Git flow.** Feature branches, PRs into `develop`, release PR into `main`. No single big commit.
 
 ## Key prompts (shortened)
 
-1. Spec, given to every stage:
-   > Monorepo web/ + api/. FastAPI extracts text (pypdf), chunks it, calls OpenAI with a strict
-   > json_schema, validates with Pydantic, one retry with the validation error, then
-   > AI_INVALID_OUTPUT. Document goes inside `<document>` tags as untrusted data, model sets
-   > injectionDetected, plus a regex heuristic. Zod on the frontend before display. No any, no
-   > console.log, no comments that repeat the code, no git commands.
-2. Stage prompt, backend:
-   > Implement app/llm (OpenAI + deterministic mock), prompts, pipeline (single call or chunks with
-   > a semaphore of 3, deterministic merge, final summary), rate limit, CORS + 403 on foreign
-   > Origin, size/page/text limits. Tests with a fake provider: valid, invalid then valid, invalid
-   > twice, injection flagged even if the model says false.
-3. Review fixes:
-   > pypdf splits Polish words ("p ł atno ś ci"). Compare pypdf layout mode vs pdfplumber on the
-   > test contract and pick the cleaner one. Injection snippet must be only the offending
-   > sentence, so the echo check can't reject a summary for repeating normal text next to it.
-4. Quality after the first real run:
-   > Never turn a percentage, a day count or a quantity into an amount. A date needs an exact
-   > day: "I kwartał 2027" is not a date. Cap amounts and dates after merge.
-5. Latency:
-   > The final summary call runs after all chunk calls and pushes the contract over 30 s. Run a
-   > summary over the full text in parallel with chunk extraction when the text is short enough.
+1. Spec for every stage: monorepo `web/` + `api/`, schema from the brief, one retry with the
+   validation error then `AI_INVALID_OUTPUT`, no `any`, no `console.log`, no comments that repeat
+   the code, no git commands.
+2. Backend: OpenAI + deterministic mock provider, chunking by pages, merge without the model,
+   tests with a fake provider (valid, invalid then valid, invalid twice, injection flag).
+3. "pypdf breaks Polish words. Compare pypdf layout mode and pdfplumber on the test contract,
+   pick the cleaner one, add a test on page 4 text."
+4. "Amounts are money only, no percentages or day counts. A date needs an exact day. Cap after
+   merge."
+5. "Final summary waits for all chunks and the contract takes over 30 s. Summarise the full text
+   in parallel with chunk extraction."
 
-## Where AI got it wrong and what I did
+## Where the generated code was wrong
 
-- **Polish text from pypdf.** The first extraction gave "wcze ś niejsze", "co dajełącznie". Claude
-  first patched the injection regex around it (joining gaps), which only hid the problem. I sent it
-  back to fix extraction itself: switched to pdfplumber, removed the hack, added a test that page 4
-  of the contract contains "warunki płatności" and "226 935,00 zł brutto".
-- **Temperature on a reasoning model.** The provider sent `temperature=0.1` except for model names
-  starting with `gpt-5`/`o`. `gpt-6-luna` rejected it with a 400, so the first real call failed.
-  Replaced the name guessing with an optional `LLM_TEMPERATURE` env var. Same story with
-  `reasoning_effort`: Claude allowed `minimal`, the model supports `none`/`low`/... only.
-- **Too slow.** With `reasoning_effort=low` the contract took 33 s in one call and 26 s in chunks
-  (final summary waited for all chunks). Fix: summary over the full text in parallel with chunk
-  extraction, and `reasoning_effort=none`. Now about 12-14 s with the same facts.
-- **Model output quality.** First real run: 43-62 amounts (whole price list, "30%" and "14 dni"
-  as PLN when I tried a smaller model), "I kwartał 2027" turned into `2027-01-01`, migration start
-  date wrong, a power of attorney attributed to the wrong person, final summary without any money
-  values. Tightened the prompt rules, added caps and near-duplicate dedupe in the merge, and asked
-  for parties, money with currency and term in the summary.
-- **Echo check too eager.** The first version of the "summary repeats the injected text" check used
-  a snippet with 20 chars of context before the match and skipped its first word, so it could
-  reject a normal summary. Narrowed the snippet to the offending sentence and added a test that the
-  regular payment terms from the same paragraph pass.
-- **Tests depended on my shell.** With `OPENAI_API_KEY` exported locally `test_config` failed.
-  Claude added an autouse fixture that clears all settings env vars and disables `.env` loading.
-- **Rules broken by the agent.** Claude ran `git stash` and `git rm --cached` once each although
-  the spec said no git commands. Nothing was lost, I checked the tree and committed by hand.
-- **Mock provider.** The regex mock produced cut-off contexts ("ament miesięczny w wysokości").
-  It's only for running without a key, but I had it cleaned up so the demo mode is readable.
+- **Text extraction** (`76d2f6d`). pypdf returned Polish words split by spaces around
+  diacritics. Claude first worked around it in the injection regex by joining the gaps, which only
+  hid it. Switched extraction to pdfplumber (pypdf still opens and validates the file), dropped
+  the workaround, added a test on page 4 of the contract.
+- **Injection echo check** (`69a0d3b`). The snippet started 20 chars before the match and the
+  check skipped its first word, so a normal summary quoting the payment terms next to the
+  injected line could be rejected. Snippet is now only the offending sentence, with a test for
+  that case.
+- **Temperature** (`7738a76`). The provider sent `temperature=0.1` unless the model name started
+  with `gpt-5` or `o`. `gpt-6-luna` answered 400, so the first real call failed. Now an optional
+  env var, not sent by default. The same commit isolated tests from my shell env: with
+  `OPENAI_API_KEY` exported, the config test failed.
+- **Reasoning effort** (`b33932a`). Claude allowed `minimal`, the model takes
+  `none|low|medium|high|xhigh`, and `none` was rejected by our own validation. Fixed the allowed
+  values.
+- **Amounts and dates** (`9829c7c`). First real runs gave 40-60 amounts (the whole price list),
+  a quarter turned into a first-of-month date, and a smaller model I tried put "30%" and
+  "14 days" in amounts as PLN. Tightened the prompt, capped and deduped after the merge.
+- **Latency** (`4241397`). With `low` effort one call took 33 s, chunked 26 s, because the final
+  summary waited for the chunks. Full-text summary now runs in parallel. 12-18 s on production.
+- **Duplicate companies** (`7434f3f`). Merge kept "Nordwave Logistics" and "Nordwave Logistics
+  sp. z o.o." as two entries. Names are now compared without the legal form.
+- **Out of scope git use.** Claude ran `git stash` and `git rm --cached` once each against the
+  spec. Nothing was lost, but one file deletion landed in the wrong commit and I moved it with a
+  rebase before the first push.
 
-## What I checked by hand
+## Checked by hand
 
-- Every diff before a commit, the prompts word by word.
-- `git log -p` and gitleaks for secrets before each push. The key exists only in a root-only env
-  file on the server.
-- The test contract against the real model: values, currencies, parties, date, injection flagged
-  and not followed, page 11 listed as having no text, time under 30 s.
+- Diffs and prompts before each commit.
+- `gitleaks` and a grep for key prefixes over the whole history before every push. The key lives
+  only in a root-only env file on the server.
+- The test contract through the live UI: parties, 184 500 / 226 935 PLN, 12 300 PLN monthly,
+  8 600 EUR yearly, 890 USD monthly, injection flagged and ignored, page 11 reported as a scan,
+  under 30 s.
+- 360 px layout without horizontal scroll, JSON download, history after reload (headless e2e).
