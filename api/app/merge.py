@@ -25,7 +25,6 @@ class MergedExtraction:
     summaries: list[str]
     key_points: list[str]
     injection_detected: bool
-    injection_quotes: list[str]
 
 
 def _norm(text: str) -> str:
@@ -53,7 +52,7 @@ def _org_key(name: str) -> str:
 
 
 def _dedupe_organizations(items: list[str]) -> list[str]:
-    # Same entity with and without a legal form: keep the longer (full) name at the first position.
+    # same entity with and without a legal form: keep the longer name at the first position
     names: dict[str, str] = {}
     for item in items:
         key = _org_key(item)
@@ -91,8 +90,7 @@ def merge_chunk_outputs(outputs: list[ChunkOutput]) -> MergedExtraction:
     amounts: list[Amount] = []
     dates: dict[tuple[str, str], DatedItem] = {}
     for out in outputs:
-        for amount in out.amounts:
-            amounts.append(amount)
+        amounts.extend(out.amounts)
         for item in out.dates:
             dates.setdefault((item.date, _norm(item.context)), item)
 
@@ -109,5 +107,4 @@ def merge_chunk_outputs(outputs: list[ChunkOutput]) -> MergedExtraction:
         summaries=[o.summary for o in outputs],
         key_points=[p for o in outputs for p in o.key_points],
         injection_detected=any(o.injection_detected for o in outputs),
-        injection_quotes=_dedupe([q for o in outputs for q in o.injection_quotes]),
     )

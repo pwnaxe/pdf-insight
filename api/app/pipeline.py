@@ -26,8 +26,6 @@ from app.schemas import (
 CHUNK_CONCURRENCY = 3
 
 _UNSAFE_NAME = re.compile(r"[\x00-\x1f\x7f<>:\"|?*]")
-
-
 _NON_WORD = re.compile(r"[\W_]+")
 _PHRASE_WORDS = 4
 
@@ -172,7 +170,7 @@ async def analyze_document(
     else:
         planned = [page for chunk in plan.chunks for page in chunk]
         if sum(len(page.text) for page in planned) <= settings.direct_summary_chars:
-            # The summary over the full text runs alongside the chunk calls to save a round trip.
+            # summary over the full text runs alongside the chunk calls to save a round trip
             outputs, final = await asyncio.gather(
                 _extract_chunks(provider, plan.chunks, check),
                 _call(

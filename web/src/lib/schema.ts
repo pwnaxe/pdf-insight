@@ -6,7 +6,7 @@ const isoDate = z.string().refine((value) => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
 }, 'Invalid date');
 
-export const DocumentTypeSchema = z.enum(['faktura', 'umowa', 'oferta', 'raport', 'inne']);
+const DocumentTypeSchema = z.enum(['faktura', 'umowa', 'oferta', 'raport', 'inne']);
 
 export const AnalysisResultSchema = z.object({
   document: z.object({
