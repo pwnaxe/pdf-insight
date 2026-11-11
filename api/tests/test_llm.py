@@ -110,3 +110,10 @@ async def test_request_kwargs_and_error_logging(caplog: pytest.LogCaptureFixture
     assert "400" in line
     assert "Unsupported value: temperature" in line
     assert "secret document text" not in line
+
+
+async def test_mock_summary_output_is_valid() -> None:
+    user = document_user_prompt([PageText(1, "Umowa z Firma sp. z o.o. na kwotę 100 zł.")])
+    raw = await MockProvider().complete_json("", user, "summary", {})
+    out = FinalOutput.model_validate_json(raw)
+    assert 3 <= len(out.key_points) <= 7
