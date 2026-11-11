@@ -8,8 +8,8 @@
   client sends a plain multipart POST, so no preflight is needed in practice.
 - `POST /api/analyze` also checks the `Origin` header itself. If it is present and not in the
   list, the API returns 403 `FORBIDDEN_ORIGIN`.
-- CORS only tells browsers what a page may read. A script, `curl` or any request without an
-  `Origin` header is not blocked by it. That is why the limits below exist.
+- CORS only tells browsers what a page may read. It does not block scripts, `curl` or any request without an
+  `Origin` header. That is why the limits below exist.
 
 ## Response headers and CSP
 
@@ -67,8 +67,8 @@ The in-app rate limit is per process, so more workers or containers mean separat
 ## Logging
 
 Per request the API logs status, duration, page count, chunk count and provider. Unhandled
-errors log only the exception type. Provider errors log the error class and the status and message
-returned by the provider. Document text and keys are not logged.
+errors log only the exception type. Provider errors log the error class plus the status and message
+from the provider. Document text and keys are not logged.
 
 ## Dependencies
 

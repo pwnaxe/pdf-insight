@@ -3,8 +3,8 @@
 ## Context
 
 A model can return a plausible value that the document never states: a total it added up
-itself, a day it filled in, a person it inferred. The prompt forbids this, but a prompt is not
-a guarantee, and an embedded instruction in the PDF may try to plant values too.
+itself, a day it filled in, a person it inferred. The prompt forbids this, but a prompt is no
+guarantee, and an instruction embedded in the PDF may try to plant values too.
 
 ## Decision
 
@@ -38,7 +38,7 @@ a guarantee, and an embedded instruction in the PDF may try to plant values too.
 ## Consequences
 
 - A correct value written in a form not listed above (for example "12,3 tys.") is dropped, and
-  the user sees the warning. This is the accepted cost of having no invented values.
+  the user sees the warning. That is the price of having no invented values.
 - A number split by a line break (`295` / `200,00`) is not joined.
 - Without a two-digit-year rule a date like `12.03.26` would be missed, with it a chain such as
   `1.3.26.5` is deliberately ignored.

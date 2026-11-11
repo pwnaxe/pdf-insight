@@ -4,8 +4,8 @@
 
 The app needs predictable JSON: fixed fields, ISO dates, 3-letter currencies, 3-7 key points.
 Free-form model output breaks the UI. The JSON schema sent to the model cannot express every
-rule: the sentence count of the summary and the length of `keyPoints` live in Pydantic
-validators and do not appear in the schema.
+rule. The summary sentence count and `keyPoints` length live in Pydantic
+validators, not in the schema.
 
 ## Decision
 

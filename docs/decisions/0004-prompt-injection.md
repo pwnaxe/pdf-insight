@@ -28,5 +28,5 @@ Several layers, none of them enough alone:
   only part of that.
 - The echo check only works when the regex matched.
 - A false positive (a contract that quotes such a phrase) gives a warning, not a failure.
-- This reduces risk and does not remove it. The model output is only data shown as text, and
-  the app does not use it to take actions.
+- This reduces the risk, it does not remove it. Model output is just data shown as text; the
+  app takes no actions based on it.

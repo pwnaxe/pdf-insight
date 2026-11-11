@@ -37,24 +37,22 @@ deterministic merge, final validation with Pydantic.
 ## Where the backend runs and why
 
 GitHub Pages only serves static files, and Vite inlines every `VITE_*` variable into the
-JavaScript bundle at build time. An OpenAI key put there would be readable by anyone who opens
-DevTools. So the browser talks to a small FastAPI service instead, and only that service knows
-the key.
+JS bundle at build time. A key put there is readable by anyone who opens DevTools. So the
+browser talks to a small FastAPI service, and only that service knows the key.
 
 The service runs as a Docker container on my own VPS, behind nginx with a Let's Encrypt
 certificate, at https://pdf-insight-api.pixelhorizon.dev. The container listens only on
-localhost, nginx handles TLS, body size and `limit_req`, the app handles CORS, the per-IP limit
+localhost. nginx handles TLS, body size and `limit_req`; the app handles CORS, the per-IP limit
 and validation. The key sits in a root-only env file on the server, outside the repo. Python
-also made PDF parsing easier (pdfplumber) than it would be in a Worker-style runtime.
+also makes PDF parsing (pdfplumber) easier than in a Worker-style runtime.
 
 ## Decisions
 
 **Text extraction on the backend.** I use pdfplumber with pypdf for opening and validating the
-file. pypdf alone split Polish letters (diacritics came out as separate characters), pdfplumber
-gives clean text.
+file. pypdf alone split Polish diacritics into separate characters, pdfplumber gives clean text.
 
-**Own server instead of Cloudflare Workers.** The backend is Python and parses PDFs, which does
-not fit a Worker well, and I already had a VPS.
+**Own server instead of Cloudflare Workers.** The API runs on my own VPS, not on serverless.
+PDF parsing in Python needs a normal server.
 
 **Model.** `gpt-6-luna` with structured outputs (`json_schema`, `strict: true`). The reply is
 validated with Pydantic on the server and with Zod on the client. Reasoning effort and
@@ -67,8 +65,8 @@ paragraphs). Chunk extraction and the summary of the full text run in parallel. 
 results are merged without the model: dedupe of organizations (a name with and without a legal
 form like `sp. z o.o.` or `GmbH` counts as one, the longer name wins), people and keywords,
 amounts and dates capped at 20, keywords at 12. With the default limits (12 chunks of 12k chars)
-the analysed text tops out at 144k chars, so the full-text summary always runs; the
-summary-from-chunk-summaries path (over `DIRECT_SUMMARY_CHARS`, 150k) only kicks in if the chunk
+the text tops out at 144k chars, so the full-text summary always runs. The
+summary-from-chunk-summaries path (over `DIRECT_SUMMARY_CHARS`, 150k) only runs if the chunk
 limits are raised.
 
 **Prompt injection.** The document goes into `<document>` tags and the prompt says it is data,
@@ -82,8 +80,8 @@ not instructions. Three layers on top of that:
 
 **Limits.** 10 MB, 100 pages, 400k chars of text. Rate limit per IP in the app (15 requests per
 10 minutes) and `limit_req` in nginx. CORS is allowed only for `pwnaxe.github.io`, and a POST with
-a foreign `Origin` gets 403. CORS only controls browsers, so the real protection is the rate
-limit and the size limits.
+a foreign `Origin` gets 403. CORS only works for browsers, so the real protection is the rate
+limit and size limits.
 
 ## Test file
 
@@ -112,16 +110,16 @@ JSON keys are camelCase.
 - `amounts[].context` and `dates[].context` are at most 80 characters. The server cuts them at a
   word boundary and removes meta remarks from the model ("pominięto", "not a date"...); a date
   whose context says it is not a date is dropped.
-- Output language: the summary, key points, keywords, title, contexts and all other extracted
-  values are written in the language of the document, as the brief requires. The UI language
-  has no effect on the analysis. See [ADR 0008](docs/decisions/0008-output-language-follows-document.md).
+- Output language: summary, key points, keywords, title, contexts and all other extracted
+  values are in the document's language, as the brief requires. UI language does not affect
+  the analysis. See [ADR 0008](docs/decisions/0008-output-language-follows-document.md).
 
 ## Language
 
 The UI is Polish by default with an English toggle (PL / EN in the header). The choice is kept in
 `localStorage` (`pdf-insight:lang`) and the dictionaries live in `web/src/lib/i18n.ts`. The toggle
-changes only the UI labels and the web app's own error texts: it is not sent to the API, it never
-re-runs an analysis and it does not affect the result. The API has no `lang` parameter (a `lang`
+changes only UI labels and the web app's own error texts. It is not sent to the API, never
+re-runs an analysis and does not affect the result. The API has no `lang` parameter (a `lang`
 field in the request is ignored). Warnings in the result follow the detected document language
 (Polish for `pl`, English otherwise), and error responses are always English
 ([api/app/messages.py](api/app/messages.py)); the web app shows its own localized text for every
@@ -203,6 +201,6 @@ Web (`web/.env.example`):
 - The rate limit is in memory, per process. More workers or containers means separate counters.
 - Multi-column layouts can mix columns.
 - Amounts and dates are capped at 20.
-- The injection heuristic is regex based and can miss paraphrased attacks. The model flag covers
-  part of that, not all.
+- The injection heuristic is regex based and can miss paraphrased attacks. The model flag catches
+  only some of them.
 - The document text is sent to OpenAI. Do not upload sensitive files.

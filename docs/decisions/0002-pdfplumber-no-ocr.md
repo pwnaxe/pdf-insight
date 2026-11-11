@@ -20,7 +20,7 @@ and more latency.
 ## Consequences
 
 - Clean Polish text for digital PDFs.
-- Scanned pages are silently absent from the analysis except for the warning, so a mixed
+- Scanned pages are missing from the analysis (only the warning mentions them), so a mixed
   document can give a partial result.
 - A fully scanned PDF is rejected with a clear message.
 - Two PDF libraries are dependencies.
