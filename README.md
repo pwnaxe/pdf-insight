@@ -34,6 +34,19 @@ OpenAI
 Steps on the server: size and `%PDF-` check, text extraction per page, chunking, model calls,
 deterministic merge, final validation with Pydantic.
 
+## Where the backend runs and why
+
+GitHub Pages only serves static files, and Vite inlines every `VITE_*` variable into the
+JavaScript bundle at build time. An OpenAI key put there would be readable by anyone who opens
+DevTools. So the browser talks to a small FastAPI service instead, and only that service knows
+the key.
+
+The service runs as a Docker container on my own VPS, behind nginx with a Let's Encrypt
+certificate, at https://pdf-insight-api.pixelhorizon.dev. The container listens only on
+localhost, nginx handles TLS, body size and `limit_req`, the app handles CORS, the per-IP limit
+and validation. The key sits in a root-only env file on the server, outside the repo. Python
+also made PDF parsing easier (pdfplumber) than it would be in a Worker-style runtime.
+
 ## Decisions
 
 **Text extraction on the backend.** I use pdfplumber with pypdf for opening and validating the
@@ -53,8 +66,10 @@ the call is retried once with the validation error appended to the prompt. A sec
 paragraphs). Chunk extraction and the summary of the full text run in parallel. The chunk
 results are merged without the model: dedupe of organizations (a name with and without a legal
 form like `sp. z o.o.` or `GmbH` counts as one, the longer name wins), people and keywords,
-amounts and dates capped at 20, keywords at 12. Documents over 150k chars get the summary from
-the chunk summaries instead.
+amounts and dates capped at 20, keywords at 12. With the default limits (12 chunks of 12k chars)
+the analysed text tops out at 144k chars, so the full-text summary always runs; the
+summary-from-chunk-summaries path (over `DIRECT_SUMMARY_CHARS`, 150k) only kicks in if the chunk
+limits are raised.
 
 **Prompt injection.** The document goes into `<document>` tags and the prompt says it is data,
 not instructions. Three layers on top of that:
