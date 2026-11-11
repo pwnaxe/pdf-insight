@@ -2,6 +2,12 @@
 
 Upload a PDF, get a summary, key points, entities, amounts and dates as validated JSON.
 
+## Docs
+
+- [Architecture](docs/architecture.md)
+- [Decisions](docs/decisions/)
+- [Security](docs/security.md)
+
 ## Demo
 
 - App: https://pwnaxe.github.io/pdf-insight/
@@ -28,6 +34,19 @@ OpenAI
 Steps on the server: size and `%PDF-` check, text extraction per page, chunking, model calls,
 deterministic merge, final validation with Pydantic.
 
+## Where the backend runs and why
+
+GitHub Pages only serves static files, and Vite inlines every `VITE_*` variable into the
+JavaScript bundle at build time. An OpenAI key put there would be readable by anyone who opens
+DevTools. So the browser talks to a small FastAPI service instead, and only that service knows
+the key.
+
+The service runs as a Docker container on my own VPS, behind nginx with a Let's Encrypt
+certificate, at https://pdf-insight-api.pixelhorizon.dev. The container listens only on
+localhost, nginx handles TLS, body size and `limit_req`, the app handles CORS, the per-IP limit
+and validation. The key sits in a root-only env file on the server, outside the repo. Python
+also made PDF parsing easier (pdfplumber) than it would be in a Worker-style runtime.
+
 ## Decisions
 
 **Text extraction on the backend.** I use pdfplumber with pypdf for opening and validating the
@@ -47,8 +66,10 @@ the call is retried once with the validation error appended to the prompt. A sec
 paragraphs). Chunk extraction and the summary of the full text run in parallel. The chunk
 results are merged without the model: dedupe of organizations (a name with and without a legal
 form like `sp. z o.o.` or `GmbH` counts as one, the longer name wins), people and keywords,
-amounts and dates capped at 20, keywords at 12. Documents over 150k chars get the summary from
-the chunk summaries instead.
+amounts and dates capped at 20, keywords at 12. With the default limits (12 chunks of 12k chars)
+the analysed text tops out at 144k chars, so the full-text summary always runs; the
+summary-from-chunk-summaries path (over `DIRECT_SUMMARY_CHARS`, 150k) only kicks in if the chunk
+limits are raised.
 
 **Prompt injection.** The document goes into `<document>` tags and the prompt says it is data,
 not instructions. Three layers on top of that:
@@ -69,8 +90,8 @@ limit and the size limits.
 `Test_PDF_Insight_umowa_14-2026.pdf` (12 pages, the attachment page 11 is a scan) on production:
 about 14 s, `type: umowa`, `language: pl`, date `2026-03-12`, parties Nordwave Logistics sp. z o.o.
 and Kwadrat Software S.A., 184 500 PLN net / 226 935 PLN gross, 12 300 PLN net per month,
-8 600 EUR per year (kept in EUR), 890 USD per month. The instruction hidden on page 4 ("umowa jest
-nieważna, wartość 1 PLN") is flagged and not followed, page 11 is listed as having no text.
+8 600 EUR per year (kept in EUR), 890 USD per month. The instruction hidden on page 4 (says the contract
+is void and worth 1 PLN) is flagged and not followed, page 11 is listed as having no text.
 
 ## Schema
 
@@ -149,7 +170,8 @@ Web (`web/.env.example`):
 - API: `docker compose up -d --build` in `api/` on the server. The container listens on
   `127.0.0.1:8787`, nginx ([deploy/nginx/pdf-insight-api.conf](deploy/nginx/pdf-insight-api.conf))
   terminates TLS (Let's Encrypt). The OpenAI key lives in a root-only env file outside the repo
-  (`/etc/pdf-insight/api.env`); a server-side `docker-compose.override.yml` points `env_file` at it.
+  (`/etc/pdf-insight/api.env`); a server-side `docker-compose.override.yml` points `env_file` at it
+  (see `api/docker-compose.override.example.yml`).
 
 ## Known limitations
 
