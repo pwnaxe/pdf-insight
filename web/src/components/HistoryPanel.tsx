@@ -14,8 +14,11 @@ export function HistoryPanel({ entries, onOpen, onDelete, onClear }: Props) {
   const { lang, t } = useI18n();
   return (
     <section className={card} aria-labelledby="history-title">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 id="history-title" className="text-lg font-semibold">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h2
+          id="history-title"
+          className="font-mono text-xs font-semibold tracking-widest text-ink-600 uppercase"
+        >
           {t.history}
         </h2>
         {entries.length > 0 && (
@@ -27,7 +30,7 @@ export function HistoryPanel({ entries, onOpen, onDelete, onClear }: Props) {
       {entries.length === 0 ? (
         <p className={mutedText}>{t.noHistory}</p>
       ) : (
-        <ul data-testid="history" className="divide-y divide-slate-200">
+        <ul data-testid="history" className="divide-y divide-ink-200">
           {entries.map((entry) => (
             <li
               key={entry.id}

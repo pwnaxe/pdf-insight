@@ -30,10 +30,10 @@ export function Dropzone({ disabled = false, onFile }: Props) {
 
   return (
     <div
-      className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-4 py-12 text-center transition-colors ${
+      className={`flex flex-col items-center gap-3 rounded-md border-2 border-dashed px-4 py-12 text-center transition-colors ${
         dragging
-          ? 'border-indigo-600 bg-indigo-50'
-          : 'border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50/50'
+          ? 'border-accent-600 bg-accent-50'
+          : 'border-ink-400 bg-white hover:border-accent-600 hover:bg-accent-50'
       }`}
       role="group"
       aria-label={t.dropAria}
@@ -44,7 +44,7 @@ export function Dropzone({ disabled = false, onFile }: Props) {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
-      <p className="text-lg font-medium text-slate-900">{t.dropTitle}</p>
+      <p className="text-lg font-semibold tracking-tight text-ink-950">{t.dropTitle}</p>
       <div
         className={primaryButton}
         role="button"
@@ -55,7 +55,7 @@ export function Dropzone({ disabled = false, onFile }: Props) {
       >
         {t.chooseFile}
       </div>
-      <p className="text-sm text-slate-600">{t.dropHint}</p>
+      <p className="font-mono text-xs text-ink-600">{t.dropHint}</p>
       <input
         ref={inputRef}
         className="sr-only"
