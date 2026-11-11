@@ -2,7 +2,7 @@ import logging
 import math
 import time
 
-from fastapi import FastAPI, Request, UploadFile
+from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import Settings, get_settings
 from app.errors import ApiError
 from app.llm import LLMProvider, build_provider
+from app.messages import DEFAULT_LANG, Lang, error_message, parse_lang
 from app.pdf import extract_pdf
 from app.pipeline import analyze_document
 from app.ratelimit import SlidingWindowLimiter
@@ -75,38 +76,40 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, __: RequestValidationError) -> JSONResponse:
-        return _error_response(
-            422, "VALIDATION_ERROR", "Invalid request. Send a PDF file in the 'file' field."
-        )
+        # the form is not parsed when validation fails, so the language is unknown here
+        return _error_response(422, "VALIDATION_ERROR", error_message("VALIDATION_ERROR", "en"))
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
-        return _error_response(exc.status_code, "HTTP_ERROR", "The request could not be handled.")
+        return _error_response(exc.status_code, "HTTP_ERROR", error_message("HTTP_ERROR", "en"))
 
     @app.exception_handler(Exception)
     async def unexpected_error(_: Request, exc: Exception) -> JSONResponse:
         logger.error("unhandled error: %s", type(exc).__name__)
-        return _error_response(500, "INTERNAL_ERROR", "An unexpected server error occurred.")
+        return _error_response(500, "INTERNAL_ERROR", error_message("INTERNAL_ERROR", "en"))
 
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.post("/api/analyze", response_model=AnalysisResult)
-    async def analyze(request: Request, file: UploadFile) -> AnalysisResult:
+    async def analyze(
+        request: Request, file: UploadFile, lang: str = Form(DEFAULT_LANG)
+    ) -> AnalysisResult:
+        language = parse_lang(lang)
         started = time.perf_counter()
         status = 200
         pages = chunks = 0
         try:
             origin = request.headers.get("origin")
             if origin is not None and origin not in settings.origins:
-                raise ApiError("FORBIDDEN_ORIGIN", "Request origin not allowed.", 403)
+                raise ApiError("FORBIDDEN_ORIGIN", error_message("FORBIDDEN_ORIGIN", language), 403)
 
             retry_after = limiter.check(_client_ip(request, settings))
             if retry_after is not None:
                 raise ApiError(
                     "RATE_LIMITED",
-                    "Too many requests. Try again in a few minutes.",
+                    error_message("RATE_LIMITED", language),
                     429,
                     {"Retry-After": str(math.ceil(retry_after))},
                 )
@@ -114,17 +117,19 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
             limit = settings.max_file_bytes
             declared = request.headers.get("content-length")
             if declared and declared.isdigit() and int(declared) > limit + READ_CHUNK:
-                raise ApiError("FILE_TOO_LARGE", _too_large(settings), 413)
-            data = await _read_capped(file, limit, _too_large(settings))
+                raise ApiError("FILE_TOO_LARGE", _too_large(settings, language), 413)
+            data = await _read_capped(file, limit, _too_large(settings, language))
 
             if not data.startswith(b"%PDF-") or not _is_pdf_upload(file):
-                raise ApiError("NOT_PDF", "This is not a PDF file.", 415)
+                raise ApiError("NOT_PDF", error_message("NOT_PDF", language), 415)
 
             extracted = await run_in_threadpool(
-                extract_pdf, data, settings.max_pages, settings.max_text_chars
+                extract_pdf, data, settings.max_pages, settings.max_text_chars, language
             )
             pages = extracted.page_count
-            run = await analyze_document(extracted, file.filename or "", provider, settings)
+            run = await analyze_document(
+                extracted, file.filename or "", provider, settings, language
+            )
             chunks = run.chunks
             return run.result
         except ApiError as exc:
@@ -146,8 +151,8 @@ def create_app(settings: Settings | None = None, provider: LLMProvider | None = 
     return app
 
 
-def _too_large(settings: Settings) -> str:
-    return f"The file is too large. The maximum size is {settings.max_file_mb} MB."
+def _too_large(settings: Settings, lang: Lang) -> str:
+    return error_message("FILE_TOO_LARGE", lang, max_mb=settings.max_file_mb)
 
 
 app = create_app()

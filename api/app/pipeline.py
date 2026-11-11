@@ -12,6 +12,7 @@ from app.errors import ApiError
 from app.injection import InjectionHit, find_injections
 from app.llm import LLMError, LLMProvider, LLMTimeout
 from app.merge import merge_chunk_outputs
+from app.messages import DEFAULT_LANG, Lang, error_message, warning_message
 from app.pdf import ExtractedPdf, PageText
 from app.prompts import document_user_prompt, final_user_prompt, retry_user_prompt, system_prompt
 from app.schemas import (
@@ -81,6 +82,7 @@ async def _call[T: BaseModel](
     model: type[T],
     user: str,
     check: Check | None = None,
+    lang: Lang = DEFAULT_LANG,
 ) -> T:
     system = system_prompt(schema_name)
     schema = model.model_json_schema()
@@ -89,13 +91,9 @@ async def _call[T: BaseModel](
         try:
             raw = await provider.complete_json(system, prompt, schema_name, schema)
         except (LLMTimeout, TimeoutError) as exc:
-            raise ApiError(
-                "AI_TIMEOUT", "The AI model did not respond in time. Try again.", 504
-            ) from exc
+            raise ApiError("AI_TIMEOUT", error_message("AI_TIMEOUT", lang), 504) from exc
         except LLMError as exc:
-            raise ApiError(
-                "AI_ERROR", "The AI service is temporarily unavailable. Try again later.", 502
-            ) from exc
+            raise ApiError("AI_ERROR", error_message("AI_ERROR", lang), 502) from exc
         try:
             output = model.model_validate(json.loads(raw))
             problem = check(output) if check else None
@@ -105,19 +103,21 @@ async def _call[T: BaseModel](
             if problem is None:
                 return output
         if attempt == 1:
-            raise ApiError("AI_INVALID_OUTPUT", "The AI model returned an invalid response.", 502)
+            raise ApiError("AI_INVALID_OUTPUT", error_message("AI_INVALID_OUTPUT", lang), 502)
         prompt = retry_user_prompt(user, problem)
     raise AssertionError("unreachable")
 
 
 async def _extract_chunks(
-    provider: LLMProvider, chunks: list[list[PageText]], check: Check
+    provider: LLMProvider, chunks: list[list[PageText]], check: Check, lang: Lang
 ) -> list[ChunkOutput]:
     semaphore = asyncio.Semaphore(CHUNK_CONCURRENCY)
 
     async def run(pages: list[PageText]) -> ChunkOutput:
         async with semaphore:
-            return await _call(provider, "chunk", ChunkOutput, document_user_prompt(pages), check)
+            return await _call(
+                provider, "chunk", ChunkOutput, document_user_prompt(pages), check, lang
+            )
 
     return list(await asyncio.gather(*(run(pages) for pages in chunks)))
 
@@ -127,31 +127,35 @@ def _page_list(pages: list[int]) -> str:
 
 
 def _warnings(
-    extracted: ExtractedPdf, truncated: bool, injection_pages: list[int], model_flag: bool
+    extracted: ExtractedPdf,
+    truncated: bool,
+    injection_pages: list[int],
+    model_flag: bool,
+    lang: Lang,
 ) -> list[str]:
     warnings: list[str] = []
     if injection_pages:
-        label = "page" if len(injection_pages) == 1 else "pages"
+        label = warning_message("page_one" if len(injection_pages) == 1 else "page_many", lang)
         warnings.append(
-            "The document contains text that tries to give instructions to an AI system "
-            f"({label} {_page_list(injection_pages)}). It was ignored during analysis."
+            warning_message("injection_pages", lang, label=label, pages=_page_list(injection_pages))
         )
     elif model_flag:
-        warnings.append(
-            "The document contains text that tries to give instructions to an AI system. "
-            "It was ignored during analysis."
-        )
+        warnings.append(warning_message("injection", lang))
     if extracted.pages_without_text:
         warnings.append(
-            f"Pages without a text layer (skipped): {_page_list(extracted.pages_without_text)}."
+            warning_message("no_text_pages", lang, pages=_page_list(extracted.pages_without_text))
         )
     if truncated:
-        warnings.append("The document is very long, so only its initial part was analysed.")
+        warnings.append(warning_message("truncated", lang))
     return warnings
 
 
 async def analyze_document(
-    extracted: ExtractedPdf, file_name: str, provider: LLMProvider, settings: Settings
+    extracted: ExtractedPdf,
+    file_name: str,
+    provider: LLMProvider,
+    settings: Settings,
+    lang: Lang = DEFAULT_LANG,
 ) -> AnalysisRun:
     plan = chunk_pages(extracted.pages, settings.chunk_chars, settings.max_chunks)
     hits = find_injections(extracted.pages)
@@ -159,7 +163,7 @@ async def analyze_document(
 
     if len(plan.chunks) == 1:
         out = await _call(
-            provider, "analysis", ModelOutput, document_user_prompt(plan.chunks[0]), check
+            provider, "analysis", ModelOutput, document_user_prompt(plan.chunks[0]), check, lang
         )
         fields = out.model_dump()
         fields.pop("injection_detected")
@@ -170,18 +174,19 @@ async def analyze_document(
         if sum(len(page.text) for page in planned) <= settings.direct_summary_chars:
             # summary over the full text runs alongside the chunk calls to save a round trip
             outputs, final = await asyncio.gather(
-                _extract_chunks(provider, plan.chunks, check),
+                _extract_chunks(provider, plan.chunks, check, lang),
                 _call(
                     provider,
                     "summary",
                     FinalOutput,
                     document_user_prompt(planned),
                     check,
+                    lang,
                 ),
             )
             merged = merge_chunk_outputs(outputs)
         else:
-            outputs = await _extract_chunks(provider, plan.chunks, check)
+            outputs = await _extract_chunks(provider, plan.chunks, check, lang)
             merged = merge_chunk_outputs(outputs)
             final = await _call(
                 provider,
@@ -189,6 +194,7 @@ async def analyze_document(
                 FinalOutput,
                 final_user_prompt(merged.summaries, merged.key_points),
                 check,
+                lang,
             )
         fields = {
             "language": merged.language,
@@ -206,7 +212,7 @@ async def analyze_document(
 
     injection_pages = sorted({hit.page for hit in hits})
     warnings = _warnings(
-        extracted, extracted.truncated or plan.truncated, injection_pages, model_flag
+        extracted, extracted.truncated or plan.truncated, injection_pages, model_flag, lang
     )
 
     try:
@@ -229,7 +235,5 @@ async def analyze_document(
             warnings=warnings,
         )
     except ValidationError as exc:
-        raise ApiError(
-            "AI_INVALID_OUTPUT", "The AI model returned an invalid response.", 502
-        ) from exc
+        raise ApiError("AI_INVALID_OUTPUT", error_message("AI_INVALID_OUTPUT", lang), 502) from exc
     return AnalysisRun(result, len(plan.chunks))

@@ -13,9 +13,14 @@ def make_client(**overrides: object) -> TestClient:
 
 
 def post(
-    client: TestClient, data: bytes, name: str = "a.pdf", type_: str = "application/pdf", **kw
+    client: TestClient,
+    data: bytes,
+    name: str = "a.pdf",
+    type_: str = "application/pdf",
+    form: dict[str, str] | None = None,
+    **kw,
 ):
-    return client.post("/api/analyze", files={"file": (name, data, type_)}, **kw)
+    return client.post("/api/analyze", files={"file": (name, data, type_)}, data=form, **kw)
 
 
 def error_code(response) -> str:
@@ -49,11 +54,44 @@ def test_too_big(contract_bytes: bytes) -> None:
     assert error_code(response) == "FILE_TOO_LARGE"
 
 
-def test_blank_pdf(blank_pdf_bytes: bytes) -> None:
-    response = post(make_client(), blank_pdf_bytes)
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({}, "OCR nie jest obsługiwany"),
+        ({"lang": "pl"}, "OCR nie jest obsługiwany"),
+        ({"lang": "en"}, "OCR is not supported"),
+        ({"lang": "de"}, "OCR nie jest obsługiwany"),
+    ],
+)
+def test_blank_pdf(blank_pdf_bytes: bytes, data: dict[str, str], expected: str) -> None:
+    response = post(make_client(), blank_pdf_bytes, form=data)
     assert response.status_code == 422
     assert error_code(response) == "NO_TEXT"
-    assert "OCR is not supported" in response.json()["error"]["message"]
+    assert expected in response.json()["error"]["message"]
+
+
+@pytest.mark.parametrize(
+    ("lang", "expected"),
+    [("pl", "Plik jest za duży. Maksymalny rozmiar to 0 MB."), ("en", "maximum size is 0 MB")],
+)
+def test_error_messages_follow_lang(contract_bytes: bytes, lang: str, expected: str) -> None:
+    response = post(make_client(max_file_mb=0), contract_bytes, form={"lang": lang})
+    assert expected in response.json()["error"]["message"]
+
+
+def test_page_limit_message_in_both_languages(contract_bytes: bytes) -> None:
+    client = make_client(max_pages=5)
+    pl = post(client, contract_bytes).json()["error"]["message"]
+    en = post(client, contract_bytes, form={"lang": "en"}).json()["error"]["message"]
+    assert pl == "Dokument ma zbyt wiele stron (limit: 5)."
+    assert en == "The document has too many pages (limit: 5)."
+
+
+def test_rate_limit_message_follows_lang() -> None:
+    client = make_client(rate_limit_per_10min=1)
+    post(client, b"x", "a.txt", "text/plain")
+    response = post(client, b"x", "a.txt", "text/plain", form={"lang": "en"})
+    assert response.json()["error"]["message"] == "Too many requests. Try again in a few minutes."
 
 
 def test_encrypted_pdf(encrypted_pdf_bytes: bytes) -> None:
@@ -103,11 +141,27 @@ def test_rate_limit_uses_forwarded_ip_when_trusted() -> None:
     assert (first.status_code, other.status_code, again.status_code) == (415, 415, 429)
 
 
+WARNINGS = {
+    "pl": ("Strony bez warstwy tekstowej (pominięte): 11.", "polecenia systemowi AI (strona 4)"),
+    "en": (
+        "Pages without a text layer (skipped): 11.",
+        "give instructions to an AI system (page 4)",
+    ),
+}
+
+
 @pytest.mark.parametrize("origin", [None, ORIGIN])
-def test_full_flow_with_mock_provider(contract_bytes: bytes, origin: str | None) -> None:
+@pytest.mark.parametrize("lang", [None, "pl", "en"])
+def test_full_flow_with_mock_provider(
+    contract_bytes: bytes, origin: str | None, lang: str | None
+) -> None:
     headers = {"Origin": origin} if origin else {}
     response = post(
-        make_client(), contract_bytes, "Test_PDF_Insight_umowa_14-2026.pdf", headers=headers
+        make_client(),
+        contract_bytes,
+        "Test_PDF_Insight_umowa_14-2026.pdf",
+        headers=headers,
+        form={"lang": lang} if lang else {},
     )
     assert response.status_code == 200
     body = response.json()
@@ -116,8 +170,9 @@ def test_full_flow_with_mock_provider(contract_bytes: bytes, origin: str | None)
     assert body["document"]["type"] == "umowa"
     assert body["document"]["language"] == "pl"
     assert body["suspectedInjection"] is True
-    assert any("Pages without a text layer (skipped): 11." in w for w in body["warnings"])
-    assert any("give instructions to an AI system (page 4)" in w for w in body["warnings"])
+    no_text, injection = WARNINGS[lang or "pl"]
+    assert any(no_text in w for w in body["warnings"])
+    assert any(injection in w for w in body["warnings"])
     amounts = {(a["value"], a["currency"]) for a in body["amounts"]}
     assert {(184500.0, "PLN"), (226935.0, "PLN"), (2150.0, "EUR"), (890.0, "USD")} <= amounts
     assert len(body["amounts"]) <= 20
