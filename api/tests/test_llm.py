@@ -10,7 +10,7 @@ from app.llm.base import LLMError
 from app.llm.mock import MockProvider
 from app.llm.openai_provider import OpenAIProvider
 from app.pdf import PageText
-from app.prompts import document_user_prompt, final_user_prompt
+from app.prompts import document_user_prompt, final_user_prompt, system_prompt
 from app.schemas import ChunkOutput, FinalOutput, ModelOutput
 
 pytestmark = pytest.mark.anyio
@@ -117,3 +117,49 @@ async def test_mock_summary_output_is_valid() -> None:
     raw = await MockProvider().complete_json("", user, "summary", {})
     out = FinalOutput.model_validate_json(raw)
     assert 3 <= len(out.key_points) <= 7
+
+
+def mock_user(text: str) -> str:
+    return document_user_prompt([PageText(1, text)])
+
+
+@pytest.mark.parametrize(("lang", "marker"), [("pl", "Dokument typu"), ("en", "classified as")])
+async def test_mock_honours_output_language(lang: str, marker: str) -> None:
+    system = system_prompt("analysis", lang)
+    raw = await MockProvider().complete_json(
+        system, mock_user("UMOWA NR 1/2026 Alfa"), "analysis", {}
+    )
+    assert marker in ModelOutput.model_validate(json.loads(raw)).summary
+
+
+async def test_mock_dates_keep_their_precision() -> None:
+    text = (
+        "UMOWA NR 1/2026\nZawarta 12 marca 2026 r. Wdrożenie w marcu 2027 nie jest datą.\n"
+        "Przegląd: czerwiec 2027. Budżet na rok w roku 2028. Płatność 05.05.2026."
+    )
+    raw = await MockProvider().complete_json("", mock_user(text), "analysis", {})
+    out = ModelOutput.model_validate(json.loads(raw))
+    assert {(d.date, d.precision) for d in out.dates} == {
+        ("2026-03-12", "day"),
+        ("2027-06", "month"),
+        ("2028", "year"),
+        ("2026-05-05", "day"),
+    }
+    assert out.date == "2026-03-12"
+
+
+async def test_mock_document_date_is_null_without_a_full_day() -> None:
+    raw = await MockProvider().complete_json("", mock_user("UMOWA\nStyczeń 2026."), "analysis", {})
+    out = ModelOutput.model_validate(json.loads(raw))
+    assert out.date is None
+    assert [(d.date, d.precision) for d in out.dates] == [("2026-01", "month")]
+
+
+async def test_mock_subtype_for_a_cv_and_none_for_a_contract() -> None:
+    cv = await MockProvider().complete_json(
+        "", mock_user("Jan Kowalski\nCV\nDoświadczenie"), "analysis", {}
+    )
+    out = ModelOutput.model_validate(json.loads(cv))
+    assert (out.type, out.subtype) == ("inne", "cv")
+    contract = await MockProvider().complete_json("", mock_user("UMOWA NR 1/2026"), "analysis", {})
+    assert ModelOutput.model_validate(json.loads(contract)).subtype is None
