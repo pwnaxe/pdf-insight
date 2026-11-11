@@ -19,11 +19,11 @@ describe('validateFile', () => {
 
   test('rejects a file with a wrong signature', async () => {
     const file = new File(['not a pdf at all'], 'a.pdf', { type: 'application/pdf' });
-    expect(await validateFile(file)).toMatch(/prawidłowy/);
+    expect(await validateFile(file)).toMatch(/valid PDF/);
   });
 
   test('rejects an empty file', async () => {
-    expect(await validateFile(new File([], 'a.pdf', { type: 'application/pdf' }))).toMatch(/pusty/);
+    expect(await validateFile(new File([], 'a.pdf', { type: 'application/pdf' }))).toMatch(/empty/);
   });
 
   test('rejects a file over the limit', async () => {

@@ -18,25 +18,25 @@ test('returns a validated result', async () => {
   expect(await analyzePdf(file)).toEqual(validResult);
 });
 
-test('maps an error code to a Polish message', async () => {
+test('maps an error code to an English message', async () => {
   stubFetch(Response.json({ error: { code: 'NO_TEXT', message: 'x' } }, { status: 422 }));
-  await expect(analyzePdf(file)).rejects.toThrow(/warstwy tekstowej/);
+  await expect(analyzePdf(file)).rejects.toThrow(/text layer/);
 });
 
 test('rejects a body that fails validation', async () => {
   stubFetch(Response.json({ foo: 1 }));
-  await expect(analyzePdf(file)).rejects.toThrow('nieoczekiwanym formacie');
+  await expect(analyzePdf(file)).rejects.toThrow('unexpected format');
 });
 
 test('reports a network failure', async () => {
   stubFetch(new TypeError('Failed to fetch'));
-  await expect(analyzePdf(file)).rejects.toThrow(/połączyć/);
+  await expect(analyzePdf(file)).rejects.toThrow(/connect/);
 });
 
 test.each([
-  [429, /Zbyt wiele żądań/],
-  [413, /za duży/],
-  [502, /błąd \(502\)/],
+  [429, /Too many requests/],
+  [413, /too large/],
+  [502, /error \(502\)/],
 ])('maps HTTP %i without a JSON body', async (status, message) => {
   stubFetch(new Response('<html>nginx</html>', { status }));
   await expect(analyzePdf(file)).rejects.toThrow(message);

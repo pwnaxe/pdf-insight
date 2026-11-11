@@ -59,7 +59,7 @@ export default function App() {
       dispatch({ type: 'success', result });
     } catch (error) {
       if (controller.signal.aborted) return;
-      const message = error instanceof Error ? error.message : 'Wystąpił nieoczekiwany błąd.';
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
       dispatch({ type: 'failure', message, file });
     }
   }, []);
@@ -93,7 +93,7 @@ export default function App() {
       <header>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">PDF Insight</h1>
         <p className="mt-1 text-slate-600">
-          Wgraj dokument PDF, aby otrzymać jego streszczenie, kwoty i daty.
+          Upload a PDF document to get its summary, amounts and dates.
         </p>
       </header>
       <main className="flex flex-col gap-6">

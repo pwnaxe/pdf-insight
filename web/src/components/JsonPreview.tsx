@@ -10,9 +10,9 @@ export function JsonPreview({ result }: { result: AnalysisResult }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(json);
-      setStatus('Skopiowano.');
+      setStatus('Copied.');
     } catch {
-      setStatus('Nie udało się skopiować.');
+      setStatus('Could not copy.');
     }
   };
 
@@ -21,10 +21,10 @@ export function JsonPreview({ result }: { result: AnalysisResult }) {
       <h2 className={cardTitle}>JSON</h2>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button type="button" className={primaryButton} onClick={() => downloadJson(result)}>
-          Pobierz JSON
+          Download JSON
         </button>
         <button type="button" className={secondaryButton} onClick={copy}>
-          Kopiuj JSON
+          Copy JSON
         </button>
         <span role="status" className={mutedText}>
           {status}
@@ -32,7 +32,7 @@ export function JsonPreview({ result }: { result: AnalysisResult }) {
       </div>
       <details>
         <summary className="w-fit cursor-pointer rounded text-sm font-medium text-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 focus-visible:outline-none">
-          Podgląd JSON
+          Preview JSON
         </summary>
         <pre
           tabIndex={0}

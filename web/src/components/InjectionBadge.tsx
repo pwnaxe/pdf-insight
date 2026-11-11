@@ -19,9 +19,9 @@ export function InjectionBadge() {
         <path d="M12 9v4M12 17h.01" />
       </svg>
       <p>
-        <strong className="block text-base font-semibold">Wykryto podejrzaną treść.</strong>{' '}
-        Dokument zawiera fragmenty wyglądające na polecenia dla systemu AI. Zostały zignorowane, ale
-        potraktuj wyniki ostrożnie.
+        <strong className="block text-base font-semibold">Suspicious content detected.</strong> The
+        document contains text that looks like instructions for an AI system. It was ignored, but
+        treat the results with care.
       </p>
     </div>
   );

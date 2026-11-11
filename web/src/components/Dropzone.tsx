@@ -34,7 +34,7 @@ export function Dropzone({ disabled = false, onFile }: Props) {
           : 'border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50/50'
       }`}
       role="group"
-      aria-label="Wgraj plik PDF"
+      aria-label="Upload a PDF file"
       onDragOver={(event) => {
         event.preventDefault();
         if (!disabled) setDragging(true);
@@ -42,7 +42,7 @@ export function Dropzone({ disabled = false, onFile }: Props) {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
-      <p className="text-lg font-medium text-slate-900">Przeciągnij plik PDF tutaj lub</p>
+      <p className="text-lg font-medium text-slate-900">Drag a PDF file here or</p>
       <div
         className={primaryButton}
         role="button"
@@ -51,9 +51,9 @@ export function Dropzone({ disabled = false, onFile }: Props) {
         onClick={disabled ? undefined : open}
         onKeyDown={disabled ? undefined : onKeyDown}
       >
-        Wybierz plik
+        Choose file
       </div>
-      <p className="text-sm text-slate-600">PDF z warstwą tekstową, do 10 MB.</p>
+      <p className="text-sm text-slate-600">PDF with a text layer, up to 10 MB.</p>
       <input
         ref={inputRef}
         className="sr-only"

@@ -14,16 +14,16 @@ export function HistoryPanel({ entries, onOpen, onDelete, onClear }: Props) {
     <section className={card} aria-labelledby="history-title">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 id="history-title" className="text-lg font-semibold">
-          Historia
+          History
         </h2>
         {entries.length > 0 && (
           <button type="button" className={secondaryButton} onClick={onClear}>
-            Wyczyść historię
+            Clear history
           </button>
         )}
       </div>
       {entries.length === 0 ? (
-        <p className={mutedText}>Brak zapisanych analiz.</p>
+        <p className={mutedText}>No saved analyses.</p>
       ) : (
         <ul data-testid="history" className="divide-y divide-slate-200">
           {entries.map((entry) => (
@@ -39,15 +39,15 @@ export function HistoryPanel({ entries, onOpen, onDelete, onClear }: Props) {
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className={primaryButton} onClick={() => onOpen(entry)}>
-                  Otwórz
+                  Open
                 </button>
                 <button
                   type="button"
                   className={secondaryButton}
-                  aria-label={`Usuń ${entry.result.document.fileName}`}
+                  aria-label={`Delete ${entry.result.document.fileName}`}
                   onClick={() => onDelete(entry.id)}
                 >
-                  Usuń
+                  Delete
                 </button>
               </div>
             </li>

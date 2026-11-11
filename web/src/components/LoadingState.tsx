@@ -11,7 +11,7 @@ export function LoadingState() {
     return () => clearInterval(timer);
   }, []);
 
-  const step = seconds < UPLOAD_STEP_SECONDS ? 'Wysyłam plik…' : 'Analizuję dokument…';
+  const step = seconds < UPLOAD_STEP_SECONDS ? 'Uploading file…' : 'Analysing document…';
 
   return (
     <div className={`${card} flex items-center gap-3`} role="status" aria-live="polite">

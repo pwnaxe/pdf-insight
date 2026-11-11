@@ -18,11 +18,11 @@ export function ErrorState({ message, canRetry, onRetry, onReset }: Props) {
       <div className="mt-4 flex flex-wrap gap-2">
         {canRetry && (
           <button type="button" className={primaryButton} onClick={onRetry}>
-            Spróbuj ponownie
+            Try again
           </button>
         )}
         <button type="button" className={secondaryButton} onClick={onReset}>
-          Wybierz inny plik
+          Choose another file
         </button>
       </div>
     </div>
