@@ -96,13 +96,14 @@ export default function App() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{t.appTitle}</h1>
-          <p className="mt-1 text-slate-600">{t.tagline}</p>
+      <header className="flex items-center justify-between gap-3 border-b-2 border-ink-900 pb-4">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span aria-hidden="true" className="size-3.5 shrink-0 bg-accent-500" />
+          <h1 className="font-mono text-xl font-bold tracking-tight text-ink-950">{t.appTitle}</h1>
         </div>
         <LanguageToggle />
       </header>
+      <p className="max-w-prose text-lg text-ink-700">{t.tagline}</p>
       <main className="flex flex-col gap-6">
         <AiNotice />
 
