@@ -101,8 +101,16 @@ Defined twice, kept in sync by hand:
 - [web/src/lib/schema.ts](web/src/lib/schema.ts) (Zod)
 
 Besides the fields from the brief there are two added ones: `suspectedInjection` (bool) and
-`warnings` (list of messages in Polish for the user: injection, pages without text, truncation).
+`warnings` (list of messages for the user: injection, pages without text, truncation).
 JSON keys are camelCase.
+
+## Language
+
+The UI is English by default with a Polish toggle (PL / EN in the header). The choice is kept in
+`localStorage` (`pdf-insight:lang`) and the dictionaries live in `web/src/lib/i18n.ts`. The web app
+sends the current language as the optional multipart field `lang` (`pl` or `en`; anything else means
+`pl`), and the API words its warnings and error messages in that language
+([api/app/messages.py](api/app/messages.py)). Errors returned by nginx itself stay in English.
 
 ## Running locally
 
