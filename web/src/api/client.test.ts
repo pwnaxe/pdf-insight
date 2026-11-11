@@ -40,6 +40,16 @@ test('sends the language as a form field', async () => {
   expect((init?.body as FormData).get('lang')).toBe('en');
 });
 
+test.each(['pl', 'en'] as const)(
+  'sends the current language (%s) with every request',
+  async (lang) => {
+    stubFetch(Response.json(validResult));
+    await analyzePdf(file, lang);
+    const init = vi.mocked(fetch).mock.calls[0]?.[1];
+    expect((init?.body as FormData).get('lang')).toBe(lang);
+  },
+);
+
 test.each([
   ['en', 'unexpected format'],
   ['pl', 'nieoczekiwanym formacie'],

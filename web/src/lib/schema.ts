@@ -6,6 +6,36 @@ const isoDate = z.string().refine((value) => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
 }, 'Invalid date');
 
+export type DatePrecision = 'year' | 'month' | 'day';
+
+export function datePrecision(value: string): DatePrecision | null {
+  const match = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  if (day && !month) return null;
+  const m = Number(month ?? 1);
+  const d = Number(day ?? 1);
+  const lastDay = new Date(Date.UTC(Number(year), m, 0)).getUTCDate();
+  if (m < 1 || m > 12 || d < 1 || d > lastDay) return null;
+  return day ? 'day' : month ? 'month' : 'year';
+}
+
+// entries saved before the precision field existed have none: derive it from the date
+const datedItem = z
+  .object({
+    date: z.string(),
+    precision: z.enum(['year', 'month', 'day']).optional(),
+    context: z.string(),
+  })
+  .transform((item, ctx) => {
+    const precision = datePrecision(item.date);
+    if (precision === null || (item.precision && item.precision !== precision)) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid date' });
+      return z.NEVER;
+    }
+    return { date: item.date, precision, context: item.context };
+  });
+
 const DocumentTypeSchema = z.enum(['faktura', 'umowa', 'oferta', 'raport', 'inne']);
 
 export const AnalysisResultSchema = z.object({
@@ -14,6 +44,12 @@ export const AnalysisResultSchema = z.object({
     pages: z.number().int().min(1),
     language: z.string().regex(/^[a-z]{2}$/),
     type: DocumentTypeSchema,
+    subtype: z
+      .string()
+      .min(1)
+      .max(30)
+      .refine((value) => value === value.toLowerCase(), 'Must be lowercase')
+      .nullish(),
     title: z.string().nullable(),
     date: isoDate.nullable(),
   }),
@@ -30,7 +66,7 @@ export const AnalysisResultSchema = z.object({
       context: z.string(),
     }),
   ),
-  dates: z.array(z.object({ date: isoDate, context: z.string() })),
+  dates: z.array(datedItem),
   keywords: z.array(z.string()),
   suspectedInjection: z.boolean(),
   warnings: z.array(z.string()),
