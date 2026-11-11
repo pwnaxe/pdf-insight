@@ -5,7 +5,7 @@ export function InjectionBadge() {
   return (
     <div
       data-testid="injection"
-      className="flex gap-3 rounded-xl border-2 border-red-700 bg-amber-100 p-5 text-red-950 shadow-sm"
+      className="flex gap-3 rounded-md border-2 border-red-700 bg-red-50 p-5 text-red-950"
       role="alert"
     >
       <svg

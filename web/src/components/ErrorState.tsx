@@ -13,7 +13,7 @@ export function ErrorState({ message, canRetry, onRetry, onReset }: Props) {
   return (
     <div
       data-testid="error"
-      className="rounded-xl border border-red-300 bg-red-50 p-5 text-red-900"
+      className="rounded-md border border-red-700 bg-red-50 p-5 text-red-950"
       role="alert"
     >
       <p className="font-medium">{message}</p>

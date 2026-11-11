@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import App from './App';
 import { InjectionBadge } from './components/InjectionBadge';
 import { ResultView } from './components/ResultView';
@@ -10,7 +10,10 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 function renderInApp(ui: React.ReactNode) {
   return render(<I18nProvider>{ui}</I18nProvider>);
@@ -57,4 +60,31 @@ test('the result view follows the language, including date and amount formats', 
   fireEvent.click(screen.getByTestId('lang-en'));
   expect(screen.getAllByText('Key points').length).toBeGreaterThan(0);
   expect(screen.getAllByText(/12 March 2026/).length).toBeGreaterThan(0);
+});
+
+test('shows the subtype next to the type and dates by precision', () => {
+  const result = structuredClone(validResult);
+  result.document.type = 'inne';
+  result.document.subtype = 'cv';
+  result.dates = [
+    { date: '2024', precision: 'year', context: 'rok' },
+    { date: '2024-05', precision: 'month', context: 'miesiąc' },
+    { date: '2024-05-17', precision: 'day', context: 'dzień' },
+  ];
+  localStorage.setItem('pdf-insight:lang', 'en');
+  renderInApp(<ResultView result={result} />);
+  expect(screen.getByText('inne')).toBeTruthy();
+  expect(screen.getByText('cv')).toBeTruthy();
+  expect(screen.getByText('2024')).toBeTruthy();
+  expect(screen.getByText('May 2024')).toBeTruthy();
+  expect(screen.getByText('17 May 2024')).toBeTruthy();
+});
+
+test('switching the language does not start a new analysis', () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal('fetch', fetchMock);
+  renderInApp(<App />);
+  fireEvent.click(screen.getByTestId('lang-en'));
+  fireEvent.click(screen.getByTestId('lang-pl'));
+  expect(fetchMock).not.toHaveBeenCalled();
 });
