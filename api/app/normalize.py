@@ -1,6 +1,6 @@
 import re
 
-from app.messages import Lang
+from app.messages import Lang, generic_amount
 from app.schemas import SUBTYPE_MAX, Amount, DatedItem, DateMention, date_precision
 
 CONTEXT_MAX = 80
@@ -13,7 +13,6 @@ _META = re.compile(
 _NOT_A_DATE = re.compile(r"not a date|nie jest dat\w*|brak daty", re.IGNORECASE)
 _BRACKETED = re.compile(r"[(\[][^()\[\]]*[)\]]")
 _EDGE_PUNCTUATION = " \t\n,;:-–—.(["
-_GENERIC_AMOUNT: dict[Lang, str] = {"pl": "kwota", "en": "amount"}
 
 
 def clean_context(text: str) -> str | None:
@@ -54,9 +53,7 @@ def normalise_document_date(value: str | None) -> str | None:
 
 def normalise_amounts(amounts: list[Amount], lang: Lang) -> list[Amount]:
     return [
-        amount.model_copy(
-            update={"context": clean_context(amount.context) or _GENERIC_AMOUNT[lang]}
-        )
+        amount.model_copy(update={"context": clean_context(amount.context) or generic_amount(lang)})
         for amount in amounts
     ]
 

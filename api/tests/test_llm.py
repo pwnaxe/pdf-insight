@@ -123,11 +123,19 @@ def mock_user(text: str) -> str:
     return document_user_prompt([PageText(1, text)])
 
 
-@pytest.mark.parametrize(("lang", "marker"), [("pl", "Dokument typu"), ("en", "classified as")])
-async def test_mock_honours_output_language(lang: str, marker: str) -> None:
-    system = system_prompt("analysis", lang)
+@pytest.mark.parametrize(
+    ("text", "marker"),
+    [
+        ("UMOWA NR 1/2026 zawarta między Alfa sp. z o.o. oraz Beta S.A. w Łodzi", "Dokument typu"),
+        (
+            "AGREEMENT NO. 1/2026 made between the Seller and the Buyer for the supply of goods",
+            "classified as",
+        ),
+    ],
+)
+async def test_mock_answers_in_the_document_language(text: str, marker: str) -> None:
     raw = await MockProvider().complete_json(
-        system, mock_user("UMOWA NR 1/2026 Alfa"), "analysis", {}
+        system_prompt("analysis"), mock_user(text), "analysis", {}
     )
     assert marker in ModelOutput.model_validate(json.loads(raw)).summary
 
