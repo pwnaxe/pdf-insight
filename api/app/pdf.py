@@ -52,7 +52,7 @@ def _open(data: bytes, lang: Lang) -> PdfReader:
     except PdfError:
         raise
     except (PyPdfError, ValueError, KeyError, TypeError, OSError, RecursionError) as exc:
-        raise PdfError("PDF_INVALID", error_message("PDF_INVALID", lang), 422) from exc
+        raise PdfError("INVALID_PDF", error_message("INVALID_PDF", lang), 415) from exc
     return reader
 
 
@@ -97,7 +97,7 @@ def extract_pdf(
         OSError,
         RecursionError,
     ) as exc:
-        raise PdfError("PDF_INVALID", error_message("PDF_INVALID", lang), 422) from exc
+        raise PdfError("INVALID_PDF", error_message("INVALID_PDF", lang), 415) from exc
 
     if not pages and not truncated:
         raise PdfError(
