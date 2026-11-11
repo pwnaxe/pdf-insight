@@ -61,7 +61,8 @@ export function ResultView({ result }: { result: AnalysisResult }) {
 
       {result.warnings.length > 0 && (
         <section
-          className="warnings rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950"
+          data-testid="warnings"
+          className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950"
           aria-label="Ostrzeżenia"
         >
           <h2 className="mb-2 text-lg font-semibold">Ostrzeżenia</h2>
