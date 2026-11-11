@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useI18n } from '../lib/i18n';
 import { primaryButton } from './ui';
 
 type Props = {
@@ -7,6 +8,7 @@ type Props = {
 };
 
 export function Dropzone({ disabled = false, onFile }: Props) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -34,7 +36,7 @@ export function Dropzone({ disabled = false, onFile }: Props) {
           : 'border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50/50'
       }`}
       role="group"
-      aria-label="Wgraj plik PDF"
+      aria-label={t.dropAria}
       onDragOver={(event) => {
         event.preventDefault();
         if (!disabled) setDragging(true);
@@ -42,7 +44,7 @@ export function Dropzone({ disabled = false, onFile }: Props) {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
-      <p className="text-lg font-medium text-slate-900">Przeciągnij plik PDF tutaj lub</p>
+      <p className="text-lg font-medium text-slate-900">{t.dropTitle}</p>
       <div
         className={primaryButton}
         role="button"
@@ -51,9 +53,9 @@ export function Dropzone({ disabled = false, onFile }: Props) {
         onClick={disabled ? undefined : open}
         onKeyDown={disabled ? undefined : onKeyDown}
       >
-        Wybierz plik
+        {t.chooseFile}
       </div>
-      <p className="text-sm text-slate-600">PDF z warstwą tekstową, do 10 MB.</p>
+      <p className="text-sm text-slate-600">{t.dropHint}</p>
       <input
         ref={inputRef}
         className="sr-only"

@@ -2,7 +2,7 @@ import type { AnalysisResult } from './schema';
 
 export function jsonFileName(fileName: string): string {
   const base = fileName.replace(/\.pdf$/i, '').trim();
-  return `${base || 'dokument'}.insight.json`;
+  return `${base || 'document'}.insight.json`;
 }
 
 export function downloadJson(result: AnalysisResult): void {
