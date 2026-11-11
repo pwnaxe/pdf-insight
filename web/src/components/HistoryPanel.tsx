@@ -1,4 +1,5 @@
 import type { HistoryEntry } from '../lib/history';
+import { useI18n } from '../lib/i18n';
 import { formatDateTime } from '../lib/format';
 import { card, mutedText, primaryButton, secondaryButton } from './ui';
 
@@ -10,20 +11,21 @@ type Props = {
 };
 
 export function HistoryPanel({ entries, onOpen, onDelete, onClear }: Props) {
+  const { lang, t } = useI18n();
   return (
     <section className={card} aria-labelledby="history-title">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 id="history-title" className="text-lg font-semibold">
-          History
+          {t.history}
         </h2>
         {entries.length > 0 && (
           <button type="button" className={secondaryButton} onClick={onClear}>
-            Clear history
+            {t.clearHistory}
           </button>
         )}
       </div>
       {entries.length === 0 ? (
-        <p className={mutedText}>No saved analyses.</p>
+        <p className={mutedText}>{t.noHistory}</p>
       ) : (
         <ul data-testid="history" className="divide-y divide-slate-200">
           {entries.map((entry) => (
@@ -35,19 +37,19 @@ export function HistoryPanel({ entries, onOpen, onDelete, onClear }: Props) {
                 <span className="font-medium [overflow-wrap:anywhere] break-words">
                   {entry.result.document.fileName}
                 </span>
-                <span className={mutedText}>{formatDateTime(entry.savedAt)}</span>
+                <span className={mutedText}>{formatDateTime(entry.savedAt, lang)}</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className={primaryButton} onClick={() => onOpen(entry)}>
-                  Open
+                  {t.open}
                 </button>
                 <button
                   type="button"
                   className={secondaryButton}
-                  aria-label={`Delete ${entry.result.document.fileName}`}
+                  aria-label={t.deleteAria(entry.result.document.fileName)}
                   onClick={() => onDelete(entry.id)}
                 >
-                  Delete
+                  {t.delete}
                 </button>
               </div>
             </li>

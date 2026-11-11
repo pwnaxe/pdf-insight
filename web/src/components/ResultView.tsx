@@ -1,5 +1,6 @@
 import { formatAmount, formatDate } from '../lib/format';
 import type { AnalysisResult } from '../lib/schema';
+import { useI18n } from '../lib/i18n';
 import { InjectionBadge } from './InjectionBadge';
 import { JsonPreview } from './JsonPreview';
 import { card, cardTitle, mutedText } from './ui';
@@ -8,6 +9,7 @@ const subTitle = 'mb-1 mt-4 text-sm font-semibold text-slate-700 first:mt-0';
 const list = 'list-disc space-y-1 pl-5 marker:text-slate-400';
 
 function NameList({ title, names }: { title: string; names: string[] }) {
+  const { t } = useI18n();
   return (
     <>
       <h3 className={subTitle}>{title}</h3>
@@ -18,20 +20,21 @@ function NameList({ title, names }: { title: string; names: string[] }) {
           ))}
         </ul>
       ) : (
-        <p className={mutedText}>None</p>
+        <p className={mutedText}>{t.none}</p>
       )}
     </>
   );
 }
 
 export function ResultView({ result }: { result: AnalysisResult }) {
+  const { lang, t } = useI18n();
   const { document: doc, entities } = result;
   const meta = [
-    { label: 'Type', value: doc.type },
-    { label: 'Language', value: doc.language },
-    { label: 'Date', value: doc.date ? formatDate(doc.date) : 'none' },
-    { label: 'Pages', value: String(doc.pages) },
-    { label: 'File', value: doc.fileName },
+    { label: t.type, value: doc.type },
+    { label: t.language, value: doc.language },
+    { label: t.date, value: doc.date ? formatDate(doc.date, lang) : t.noDate },
+    { label: t.pages, value: String(doc.pages) },
+    { label: t.file, value: doc.fileName },
   ];
 
   return (
@@ -40,7 +43,7 @@ export function ResultView({ result }: { result: AnalysisResult }) {
 
       <section className={card} aria-labelledby="summary-title">
         <p className="text-xs font-semibold tracking-wide text-indigo-700 uppercase">
-          Analysis result
+          {t.analysisResult}
         </p>
         <h2 id="summary-title" className="mt-1 text-2xl font-semibold [overflow-wrap:anywhere]">
           {doc.title ?? doc.fileName}
@@ -53,7 +56,7 @@ export function ResultView({ result }: { result: AnalysisResult }) {
             </div>
           ))}
         </dl>
-        <h3 className={`${subTitle} mt-5`}>Summary</h3>
+        <h3 className={`${subTitle} mt-5`}>{t.summary}</h3>
         <p data-testid="summary" className="leading-relaxed text-slate-800">
           {result.summary}
         </p>
@@ -63,9 +66,9 @@ export function ResultView({ result }: { result: AnalysisResult }) {
         <section
           data-testid="warnings"
           className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950"
-          aria-label="Warnings"
+          aria-label={t.warnings}
         >
-          <h2 className="mb-2 text-lg font-semibold">Warnings</h2>
+          <h2 className="mb-2 text-lg font-semibold">{t.warnings}</h2>
           <ul className="list-disc space-y-1 pl-5">
             {result.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
@@ -75,7 +78,7 @@ export function ResultView({ result }: { result: AnalysisResult }) {
       )}
 
       <section className={card}>
-        <h2 className={cardTitle}>Key points</h2>
+        <h2 className={cardTitle}>{t.keyPoints}</h2>
         <ul className={list}>
           {result.keyPoints.map((point) => (
             <li key={point}>{point}</li>
@@ -84,22 +87,22 @@ export function ResultView({ result }: { result: AnalysisResult }) {
       </section>
 
       <section className={card}>
-        <h2 className={cardTitle}>Entities</h2>
-        <NameList title="Organizations" names={entities.organizations} />
-        <NameList title="People" names={entities.people} />
+        <h2 className={cardTitle}>{t.entities}</h2>
+        <NameList title={t.organizations} names={entities.organizations} />
+        <NameList title={t.people} names={entities.people} />
       </section>
 
       <section className={card}>
-        <h2 className={cardTitle}>Amounts</h2>
+        <h2 className={cardTitle}>{t.amounts}</h2>
         {result.amounts.length > 0 ? (
           <table className="w-full text-left text-sm">
             <thead className="sr-only sm:not-sr-only sm:table-header-group">
               <tr className="border-b border-slate-200 text-slate-600">
                 <th scope="col" className="py-2 pr-4 font-semibold">
-                  Amount
+                  {t.amount}
                 </th>
                 <th scope="col" className="py-2 font-semibold">
-                  Context
+                  {t.context}
                 </th>
               </tr>
             </thead>
@@ -110,7 +113,7 @@ export function ResultView({ result }: { result: AnalysisResult }) {
                   className="border-b border-slate-100 last:border-0 max-sm:block max-sm:py-3"
                 >
                   <td className="py-2 pr-4 align-top font-semibold whitespace-nowrap max-sm:block max-sm:py-0 sm:py-2.5">
-                    {formatAmount(amount.value, amount.currency)}
+                    {formatAmount(amount.value, amount.currency, lang)}
                   </td>
                   <td className="py-2 align-top text-slate-700 max-sm:block max-sm:py-0 sm:py-2.5">
                     {amount.context}
@@ -120,28 +123,28 @@ export function ResultView({ result }: { result: AnalysisResult }) {
             </tbody>
           </table>
         ) : (
-          <p className={mutedText}>None</p>
+          <p className={mutedText}>{t.none}</p>
         )}
       </section>
 
       <section className={card}>
-        <h2 className={cardTitle}>Dates</h2>
+        <h2 className={cardTitle}>{t.dates}</h2>
         {result.dates.length > 0 ? (
           <ul className="divide-y divide-slate-100">
             {result.dates.map((item, index) => (
               <li key={`${item.date}-${index}`} className="py-2 first:pt-0 last:pb-0">
-                <strong>{formatDate(item.date)}</strong>
+                <strong>{formatDate(item.date, lang)}</strong>
                 <span className="text-slate-700"> - {item.context}</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className={mutedText}>None</p>
+          <p className={mutedText}>{t.none}</p>
         )}
       </section>
 
       <section className={card}>
-        <h2 className={cardTitle}>Keywords</h2>
+        <h2 className={cardTitle}>{t.keywords}</h2>
         <ul className="flex flex-wrap gap-2">
           {result.keywords.map((keyword) => (
             <li

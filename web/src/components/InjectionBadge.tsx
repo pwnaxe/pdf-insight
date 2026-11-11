@@ -1,4 +1,7 @@
+import { useI18n } from '../lib/i18n';
+
 export function InjectionBadge() {
+  const { t } = useI18n();
   return (
     <div
       data-testid="injection"
@@ -19,9 +22,8 @@ export function InjectionBadge() {
         <path d="M12 9v4M12 17h.01" />
       </svg>
       <p>
-        <strong className="block text-base font-semibold">Suspicious content detected.</strong> The
-        document contains text that looks like instructions for an AI system. It was ignored, but
-        treat the results with care.
+        <strong className="block text-base font-semibold">{t.injectionTitle}</strong>{' '}
+        {t.injectionBody}
       </p>
     </div>
   );

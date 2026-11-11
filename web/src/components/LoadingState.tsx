@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../lib/i18n';
 import { card } from './ui';
 
 const UPLOAD_STEP_SECONDS = 2;
 
 export function LoadingState() {
+  const { t } = useI18n();
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
@@ -11,7 +13,7 @@ export function LoadingState() {
     return () => clearInterval(timer);
   }, []);
 
-  const step = seconds < UPLOAD_STEP_SECONDS ? 'Uploading file…' : 'Analysing document…';
+  const step = seconds < UPLOAD_STEP_SECONDS ? t.uploading : t.analysing;
 
   return (
     <div className={`${card} flex items-center gap-3`} role="status" aria-live="polite">
@@ -20,7 +22,7 @@ export function LoadingState() {
         aria-hidden="true"
       />
       <span>
-        {step} <span className="text-sm text-slate-600">({seconds} s)</span>
+        {step} <span className="text-sm text-slate-600">({t.seconds(seconds)})</span>
       </span>
     </div>
   );
