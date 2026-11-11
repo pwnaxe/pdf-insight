@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 export type Lang = 'pl' | 'en';
 
 export const LANGS: readonly Lang[] = ['pl', 'en'];
-export const DEFAULT_LANG: Lang = 'en';
+export const DEFAULT_LANG: Lang = 'pl';
 export const LANG_STORAGE_KEY = 'pdf-insight:lang';
 
 const LOCALES: Record<Lang, string> = { pl: 'pl-PL', en: 'en-GB' };
