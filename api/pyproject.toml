@@ -5,12 +5,12 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
-    "pydantic>=2",
+    "pydantic>=2.14.4",
     "pydantic-settings",
     "pypdf",
     "openai",
     "python-multipart",
-    "pdfplumber>=0.11.10",
+    "pdfplumber>=0.11.11",
 ]
 
 [dependency-groups]
